@@ -33,14 +33,14 @@ def sanitize_filename(name):
 
 def refresh_proxies():
     global raw_proxy_pool
-    print("    -> Fetching fresh proxy lists from multiple GitHub sources...")
+    print("    -> Fetching and rapidly verifying fresh proxy lists...")
     raw_proxy_pool = []
+    temp_pool = []
     
     proxy_sources = {
         "socks5": [
             "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/socks5.txt",
-            "https://raw.githubusercontent.com/monosans/proxy-list/main/proxies/socks5.txt",
-            "https://raw.githubusercontent.com/hookzof/socks5_list/master/proxy.txt"
+            "https://raw.githubusercontent.com/monosans/proxy-list/main/proxies/socks5.txt"
         ],
         "socks4": [
             "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/socks4.txt",
@@ -48,8 +48,7 @@ def refresh_proxies():
         ],
         "http": [
             "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt",
-            "https://raw.githubusercontent.com/monosans/proxy-list/main/proxies/http.txt",
-            "https://raw.githubusercontent.com/roosterkid/openproxylist/main/HTTPS_RAW.txt"
+            "https://raw.githubusercontent.com/monosans/proxy-list/main/proxies/http.txt"
         ]
     }
     
@@ -57,14 +56,27 @@ def refresh_proxies():
         for url in urls:
             try:
                 req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-                with urllib.request.urlopen(req, timeout=10) as response:
+                with urllib.request.urlopen(req, timeout=5) as response:
                     for line in response.read().decode('utf-8').splitlines():
-                        if line.strip():
-                            raw_proxy_pool.append(f"{protocol}://{line.strip()}")
-            except Exception:
-                pass
-                
-    random.shuffle(raw_proxy_pool)
+                        if line.strip(): temp_pool.append(f"{protocol}://{line.strip()}")
+            except: pass
+
+    random.shuffle(temp_pool)
+    
+    # Concurrent pre-filter: Only keep proxies that are actually online
+    def check_proxy(p):
+        try:
+            requests.get("https://www.youtube.com", proxies={"http": p, "https": p}, timeout=3)
+            return p
+        except: return None
+
+    print("    -> Filtering out offline proxies (this takes ~3 seconds)...")
+    with concurrent.futures.ThreadPoolExecutor(max_workers=200) as executor:
+        # Test a batch of 400 to find enough working ones quickly
+        results = list(executor.map(check_proxy, temp_pool[:400]))
+        
+    raw_proxy_pool = [r for r in results if r is not None]
+    print(f"    -> Retained {len(raw_proxy_pool)} verified online proxies for yt-dlp.")
 
 def download_audio_ytdlp(vid_id, output_path, folder, proxy):
     base_out = output_path.rsplit('.', 1)[0]
@@ -77,8 +89,9 @@ def download_audio_ytdlp(vid_id, output_path, folder, proxy):
         "--embed-metadata", 
         "--extractor-args", "youtube:player_client=tv,android,web",
         "--download-archive", f"{folder}/ytdlp_archive.txt",
-        "--socket-timeout", "30",
-        "--retries", "3",
+        "--socket-timeout", "15",  # Reduced so bad proxies fail out instantly
+        "--retries", "1",          # Don't waste time retrying on a dead IP
+        "--no-check-certificates", # Stop free proxies from failing SSL handshakes
         "--proxy", proxy,
         "--quiet", "--no-warnings",
         "-o", temp_out,
@@ -86,7 +99,7 @@ def download_audio_ytdlp(vid_id, output_path, folder, proxy):
     ]
         
     try:
-        result = subprocess.run(cmd, timeout=180, capture_output=True, text=True)
+        result = subprocess.run(cmd, timeout=90, capture_output=True, text=True)
         if os.path.exists(output_path):
             return "SUCCESS"
         if "Video unavailable" in result.stderr or "Private video" in result.stderr:
