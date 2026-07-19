@@ -100,6 +100,7 @@ def download_audio_ytdlp(vid_id, output_path, folder, proxy=None):
     cmd = [
         sys.executable, "-m", "yt_dlp",
         "-x", "--audio-format", "opus", "--audio-quality", "96K",
+        "--embed-metadata", 
         "--extractor-args", "youtube:player_client=tv,android,web",
         "--download-archive", f"{folder}/ytdlp_archive.txt",
         "--socket-timeout", "20",
@@ -177,12 +178,16 @@ for playlist_id, playlist_name in playlist_ids.items():
 
             for item in vid_response['items']:
                 vid_id = item['id']
+                
+                desc = item['snippet'].get('description', '')
+                
                 current[vid_id] = {
-                    "title"     : item['snippet']['title'],
-                    "channel"   : item['snippet']['channelTitle'],
-                    "published" : item['snippet']['publishedAt'],
-                    "duration"  : item['contentDetails']['duration'],
-                    "url"       : f"https://www.youtube.com/watch?v={vid_id}"
+                    "title"       : item['snippet']['title'],
+                    "channel"     : item['snippet']['channelTitle'],
+                    "published"   : item['snippet']['publishedAt'],
+                    "duration"    : item['contentDetails']['duration'],
+                    "description" : desc,
+                    "url"         : f"https://www.youtube.com/watch?v={vid_id}"
                 }
 
             nextPageToken = pl_response.get("nextPageToken")
@@ -206,7 +211,10 @@ for playlist_id, playlist_name in playlist_ids.items():
                     f.write(f"   Channel  : {meta['channel']}\n")
                     f.write(f"   Published: {meta['published']}\n")
                     f.write(f"   Duration : {meta['duration']}\n")
-                    f.write(f"   URL      : {meta['url']}\n\n")
+                    f.write(f"   URL      : {meta['url']}\n")
+                    
+                    short_desc = meta['description'].replace('\n', ' ')[:150]
+                    f.write(f"   Desc     : {short_desc}...\n\n")
                 f.write("#-----------------------------------------------#\n\n")
 
         if removed:
@@ -217,7 +225,10 @@ for playlist_id, playlist_name in playlist_ids.items():
                     f.write(f"   Channel  : {meta['channel']}\n")
                     f.write(f"   Published: {meta['published']}\n")
                     f.write(f"   Duration : {meta['duration']}\n")
-                    f.write(f"   URL      : {meta['url']}\n\n")
+                    f.write(f"   URL      : {meta['url']}\n")
+                    
+                    short_desc = meta['description'].replace('\n', ' ')[:150]
+                    f.write(f"   Desc     : {short_desc}...\n\n")
                 f.write("#-----------------------------------------------#\n\n")
 
         with open(data_file, 'wb') as f:
