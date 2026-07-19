@@ -93,13 +93,13 @@ def download_audio_ytdlp(vid_id, output_path, folder, proxy):
         "-f", "bestaudio",
         "-x", "--audio-format", "opus",
         "--embed-metadata", 
-        "--extractor-args", "youtube:player_client=android,web", # Removed 'tv' client as it currently triggers aggressive blocking
+        "--extractor-args", "youtube:player_client=android,web",
         "--download-archive", f"{folder}/ytdlp_archive.txt",
         "--socket-timeout", "20",  
         "--retries", "1",          
         "--no-check-certificates", 
         "--proxy", proxy,
-        "--quiet", "--no-warnings",
+        # REMOVED: "--quiet" and "--no-warnings" to expose the raw logs
         "-o", temp_out,
         f"https://www.youtube.com/watch?v={vid_id}"
     ]
@@ -109,16 +109,18 @@ def download_audio_ytdlp(vid_id, output_path, folder, proxy):
         if os.path.exists(output_path):
             return "SUCCESS"
             
-        # Expose the exact error message from yt-dlp to the console
-        err_lines = result.stderr.strip().splitlines()
-        if err_lines:
-            error_msg = err_lines[-1]
-            if "Video unavailable" in error_msg or "Private video" in error_msg:
-                return "UNAVAILABLE"
-            print(f"        -> yt-dlp Error: {error_msg}")
-        else:
-            print("        -> yt-dlp Error: Unknown proxy failure (Connection dropped).")
+        error_output = result.stderr.strip()
+        if not error_output: 
+            error_output = result.stdout.strip()
             
+        if "Video unavailable" in error_output or "Private video" in error_output:
+            return "UNAVAILABLE"
+            
+        # Scan for the actual ERROR line in the verbose output
+        err_lines = [line for line in error_output.splitlines() if "ERROR:" in line]
+        final_err = err_lines[-1] if err_lines else (error_output.splitlines()[-1] if error_output else "Unknown/Empty output.")
+        
+        print(f"        -> yt-dlp Raw Error: {final_err}")
         return "FAILED"
         
     except subprocess.TimeoutExpired:
