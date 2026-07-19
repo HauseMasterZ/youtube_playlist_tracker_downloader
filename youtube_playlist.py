@@ -138,6 +138,10 @@ def git_commit_and_push(title):
     try:
         subprocess.run(['git', 'add', '-A'], check=True, stdout=subprocess.DEVNULL)
         subprocess.run(['git', 'commit', '-m', f"{title}"], check=True, stdout=subprocess.DEVNULL)
+        
+        # Pull and rebase remote changes to prevent "fetch first" rejection errors
+        subprocess.run(['git', 'pull', '--rebase'], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        
         subprocess.run(['git', 'push'], check=True, stdout=subprocess.DEVNULL)
     except subprocess.CalledProcessError:
         pass
