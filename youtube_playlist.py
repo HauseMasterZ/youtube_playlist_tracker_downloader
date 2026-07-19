@@ -318,8 +318,7 @@ for playlist_id, playlist_name in playlist_ids.items():
                         skip_hunting = True 
                         break
                     else:
-                        print("    -> Cached proxy failed or video is geo-blocked here. Removing from cache.")
-                        working_proxies_cache.remove(cached_proxy)
+                        print("    -> Cached proxy failed or video is geo-blocked here.")
                 
                 if skip_hunting:
                     continue
