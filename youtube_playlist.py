@@ -155,6 +155,7 @@ for playlist_id, playlist_name in playlist_ids.items():
                 open(file_path, 'w').close()
 
         current       = {}
+        track_map     = {}
         nextPageToken = None
 
         while True:
@@ -168,7 +169,13 @@ for playlist_id, playlist_name in playlist_ids.items():
             if not pl_response.get('items'):
                 break
 
-            vid_ids = [item["contentDetails"]["videoId"] for item in pl_response['items']]
+            vid_ids = []
+            for item in pl_response['items']:
+                vid_id = item["contentDetails"]["videoId"]
+                vid_ids.append(vid_id)
+                # Map the exact playlist order index
+                if vid_id not in track_map:
+                    track_map[vid_id] = len(track_map) + 1
 
             vid_response = youtube.videos().list(
                 part       = "snippet, contentDetails",
@@ -187,12 +194,16 @@ for playlist_id, playlist_name in playlist_ids.items():
                     "published"   : item['snippet']['publishedAt'],
                     "duration"    : item['contentDetails']['duration'],
                     "description" : desc,
-                    "url"         : f"https://www.youtube.com/watch?v={vid_id}"
+                    "url"         : f"https://www.youtube.com/watch?v={vid_id}",
+                    "track_number": track_map[vid_id]
                 }
 
             nextPageToken = pl_response.get("nextPageToken")
             if not nextPageToken:
                 break
+
+        # Sort the dictionary strictly by the YouTube playlist order
+        sorted_current = sorted(current.items(), key=lambda x: x[1]['track_number'])
 
         if os.path.exists(data_file):
             with open(data_file, 'rb') as f:
@@ -206,8 +217,8 @@ for playlist_id, playlist_name in playlist_ids.items():
         if added:
             with open(added_file, "a", encoding="utf-8") as f:
                 f.write(f"Added on: {current_time}\n\n")
-                for i, (vid_id, meta) in enumerate(added.items(), 1):
-                    f.write(f"{i}: {meta['title']}\n")
+                for vid_id, meta in added.items():
+                    f.write(f"Track {meta['track_number']}: {meta['title']}\n")
                     f.write(f"   Channel  : {meta['channel']}\n")
                     f.write(f"   Published: {meta['published']}\n")
                     f.write(f"   Duration : {meta['duration']}\n")
@@ -220,8 +231,8 @@ for playlist_id, playlist_name in playlist_ids.items():
         if removed:
             with open(removed_file, "a", encoding="utf-8") as f:
                 f.write(f"Removed on: {current_time}\n\n")
-                for i, (vid_id, meta) in enumerate(removed.items(), 1):
-                    f.write(f"{i}: {meta['title']}\n")
+                for vid_id, meta in removed.items():
+                    f.write(f"Track {meta.get('track_number', '?')}: {meta['title']}\n")
                     f.write(f"   Channel  : {meta['channel']}\n")
                     f.write(f"   Published: {meta['published']}\n")
                     f.write(f"   Duration : {meta['duration']}\n")
@@ -236,10 +247,24 @@ for playlist_id, playlist_name in playlist_ids.items():
 
         with open(titles_file, "w", encoding="utf-8") as f:
             f.write(f"Playlist last checked on: {current_time}\n\n")
-            for i, meta in enumerate(current.values(), 1):
-                f.write(f"{i}: {meta['title']}\n")
+            for vid_id, meta in sorted_current:
+                f.write(f"{meta['track_number']}: {meta['title']}\n")
 
-        for vid_id, meta in current.items():
+        # Generate the strict-order playlist file
+        m3u_path = f"{folder}/_Playlist_Order.m3u8"
+        with open(m3u_path, "w", encoding="utf-8") as f:
+            f.write("#EXTM3U\n")
+            for vid_id, meta in sorted_current:
+                safe_title = sanitize_filename(meta['title'])
+                safe_channel = sanitize_filename(meta['channel'])
+                if not safe_title: safe_title = vid_id
+                if not safe_channel: safe_channel = "Unknown"
+                
+                f.write(f"#EXTINF:-1,{meta['title']} - {meta['channel']}\n")
+                f.write(f"{safe_title} - {safe_channel}.opus\n")
+
+        # Process and download missing audio files
+        for vid_id, meta in sorted_current:
             safe_title = sanitize_filename(meta['title'])
             safe_channel = sanitize_filename(meta['channel'])
             
@@ -284,6 +309,16 @@ for playlist_id, playlist_name in playlist_ids.items():
                         
                 if not success:
                     print(f"ERROR: Could not download {detailed_name} after exhausting all options.")
+                    
+        # Final sync push to make sure .m3u8 and tracking text files are updated on GitHub 
+        # even if no actual audio was downloaded this run
+        print(f"    -> Syncing exact playlist order (.m3u8) and logs for {playlist_name}...")
+        try:
+            subprocess.run(['git', 'add', '-A'], check=True, stdout=subprocess.DEVNULL)
+            subprocess.run(['git', 'commit', '-m', f"Sync {playlist_name} playlist data & M3U8 order"], check=True, stdout=subprocess.DEVNULL)
+            subprocess.run(['git', 'push'], check=True, stdout=subprocess.DEVNULL)
+        except subprocess.CalledProcessError:
+            pass 
 
     except Exception as e:
         print(f"Failed to process {playlist_name}: {e}")
