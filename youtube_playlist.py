@@ -295,7 +295,7 @@ for playlist_id, playlist_name in playlist_ids.items():
                 if vid_id in dead_videos:
                     continue
 
-                print(f"Missing Audio File: {detailed_name} | https://www.youtube.com/watch?v={vid_id}")
+                print(f"Missing Audio File: {detailed_name} | https://www.youtube.com/watch?v={vid_id} | {playlist_name}")
                 file_start_time = datetime.datetime.now()
                 skip_hunting = False
                 
