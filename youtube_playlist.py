@@ -261,6 +261,9 @@ for playlist_id, playlist_name in playlist_ids.items():
 
         with open(dead_file, "r", encoding="utf-8") as f:
             dead_videos = f.read()
+# Process and download missing audio files
+        with open(dead_file, "r", encoding="utf-8") as f:
+            dead_videos = f.read()
 
         for vid_id, meta in sorted_current:
             safe_title = sanitize_filename(meta['title'])
@@ -288,33 +291,22 @@ for playlist_id, playlist_name in playlist_ids.items():
                         git_commit_and_push(f"Add track: {detailed_name}")
                         success = True
                         break
-                    elif res == "UNAVAILABLE":
-                        print(f"    -> FATAL: Video is unavailable on YouTube. Skipping permanently.")
-                        with open(dead_file, "a", encoding="utf-8") as f:
-                            f.write(f"{vid_id} - {detailed_name}\n")
-                        success = True # Technically not success, but allows loop to skip proxy search
-                        break
                     else:
-                        print("    -> Cached proxy failed. Removing from cache.")
+                        print("    -> Cached proxy failed or video is geo-blocked here. Removing from cache.")
                         working_proxies_cache.remove(cached_proxy)
                 
                 if success:
                     continue
                 
                 # Proxy Hunting
+                unavailable_count = 0
                 for attempt in range(50):
                     if not raw_proxy_pool: refresh_proxies()
                     proxy = raw_proxy_pool.pop(0)
                     
-                    print(f"    -> (Attempt {attempt+1}/25) Trying proxy: {proxy}")
+                    print(f"    -> (Attempt {attempt+1}/50) Trying proxy: {proxy}")
                     res = download_audio_ytdlp(vid_id, output_path, folder, proxy=proxy)
                     
-                    if res == "UNAVAILABLE":
-                        print(f"    -> FATAL: Video is unavailable on YouTube. Skipping permanently.")
-                        with open(dead_file, "a", encoding="utf-8") as f:
-                            f.write(f"{vid_id} - {detailed_name}\n")
-                        break
-                        
                     if res == "SUCCESS":
                         print(f"    -> Download complete: {output_path}")
                         git_commit_and_push(f"Add track: {detailed_name}")
@@ -322,8 +314,17 @@ for playlist_id, playlist_name in playlist_ids.items():
                         success = True
                         break
                         
-                if not success and res != "UNAVAILABLE":
-                    print(f"ERROR: Could not download {detailed_name} after exhausting proxy options.")
+                    if res == "UNAVAILABLE":
+                        unavailable_count += 1
+                        print(f"        -> Video unavailable in this proxy's region. (Count: {unavailable_count}/5)")
+                        if unavailable_count >= 5:
+                            print(f"    -> FATAL: Video unavailable across 5 different proxies. Skipping permanently.")
+                            with open(dead_file, "a", encoding="utf-8") as f:
+                                f.write(f"{vid_id} - {detailed_name}\n")
+                            break
+                        
+                if not success and unavailable_count < 5:
+                    print(f"ERROR: Could not download {detailed_name} after exhausting 50 proxy options.")
 
         print(f"    -> Syncing exact playlist order (.m3u8) and logs for {playlist_name}...")
         git_commit_and_push(f"Sync {playlist_name} tracker and logs")
