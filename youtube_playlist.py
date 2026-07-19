@@ -93,19 +93,21 @@ def download_audio_ytdlp(vid_id, output_path, folder, proxy):
         "-f", "bestaudio/best",
         "-x", "--audio-format", "opus",
         "--embed-metadata", 
-        # CRITICAL FIX: Dropped 'web' client. Spoofing 'ios' and 'android' bypasses the new bot-checks.
         "--extractor-args", "youtube:player_client=ios,android",
-        "--socket-timeout", "15",  # Drop timeout to fail faster on bad proxies
-        "--retries", "1",          
+        "--socket-timeout", "60",         # Increased: Wait up to 60s for a proxy to respond
+        "--retries", "10",                # Increased: Retry connection 10 times if it drops
+        "--fragment-retries", "10",       # Added: Retry downloading individual audio chunks
         "--no-check-certificates", 
+        "--force-ipv4",             
+        "--legacy-server-connect",  
         "--proxy", proxy,
         "-o", temp_out,
         f"https://www.youtube.com/watch?v={vid_id}"
     ]
         
     try:
-        # Reduced overall timeout so we don't wait on hanging proxies
-        result = subprocess.run(cmd, timeout=60, capture_output=True, text=True)
+        # MASSIVE TIMEOUT INCREASE: Allow up to 10 minutes (600s) for slow proxies to finish a song
+        result = subprocess.run(cmd, timeout=600, capture_output=True, text=True)
         if os.path.exists(output_path):
             return "SUCCESS"
             
@@ -116,10 +118,8 @@ def download_audio_ytdlp(vid_id, output_path, folder, proxy):
         if "Video unavailable" in error_output or "Private video" in error_output:
             return "UNAVAILABLE"
             
-        # Clean up the output to just show the core error without the GitHub link spam
         err_lines = [line for line in error_output.splitlines() if "ERROR:" in line]
         if err_lines:
-            # Slices off the generic "please report this issue on github" text
             final_err = err_lines[-1].split("; please report this issue")[0]
             print(f"        -> yt-dlp Raw Error: {final_err}")
         else:
@@ -128,7 +128,7 @@ def download_audio_ytdlp(vid_id, output_path, folder, proxy):
         return "FAILED"
         
     except subprocess.TimeoutExpired:
-        print("        -> yt-dlp Error: Process timed out (Proxy hung up).")
+        print("        -> yt-dlp Error: Process timed out (Proxy took longer than 10 minutes).")
         return "FAILED"
     except Exception as e:
         print(f"        -> yt-dlp Error: {str(e)}")
@@ -302,7 +302,7 @@ for playlist_id, playlist_name in playlist_ids.items():
                     continue
                 
                 # Proxy Hunting
-                for attempt in range(25):
+                for attempt in range(50):
                     if not raw_proxy_pool: refresh_proxies()
                     proxy = raw_proxy_pool.pop(0)
                     
