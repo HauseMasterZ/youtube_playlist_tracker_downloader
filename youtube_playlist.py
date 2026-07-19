@@ -6,19 +6,11 @@ import sys
 import subprocess
 import random
 import urllib.request
-import concurrent.futures   # <--- ADD THIS
-import requests             # <--- ADD THIS
-from googleapiclient.discovery import build
+import concurrent.futures
 import requests
+import socket
+from googleapiclient.discovery import build
 
-def is_proxy_youtube_ready(proxy):
-    # Tests if the proxy can actually reach YouTube in under 3 seconds
-    try:
-        proxies = {"http": proxy, "https": proxy}
-        res = requests.get("https://www.youtube.com/generate_204", proxies=proxies, timeout=3)
-        return res.status_code == 204
-    except:
-        return False
 print("Installing required multi-threading and proxy libraries...")
 subprocess.check_call([sys.executable, "-m", "pip", "install", "-U", "yt-dlp", "requests", "PySocks"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
@@ -41,6 +33,23 @@ raw_proxy_pool = []
 
 def sanitize_filename(name):
     return re.sub(r'[\\/*?:"<>|]', "", name)
+
+def is_youtube_ready(proxy):
+    try:
+        res = requests.get("https://www.youtube.com/generate_204", proxies={"http": proxy, "https": proxy}, timeout=3)
+        return proxy if res.status_code == 204 else None
+    except:
+        return None
+
+def get_youtube_verified_proxies(raw_proxies, max_workers=200):
+    print(f"    -> Concurrently verifying {len(raw_proxies)} proxies strictly against YouTube servers...")
+    verified_pool = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+        results = executor.map(is_youtube_ready, raw_proxies)
+        for res in results:
+            if res: verified_pool.append(res)
+    print(f"    -> Retained {len(verified_pool)} strictly YouTube-ready proxies.")
+    return verified_pool
 
 def refresh_proxies():
     global raw_proxy_pool
@@ -74,12 +83,9 @@ def refresh_proxies():
 
     random.shuffle(temp_pool)
     
-    # Protocol-agnostic socket check (Preserves SOCKS proxies!)
-    import socket
     def check_proxy(p):
         try:
             ip, port = p.split("://")[1].split(":")
-            # Simple TCP ping to see if the server is alive
             with socket.create_connection((ip, int(port)), timeout=2):
                 return p
         except: 
@@ -87,11 +93,10 @@ def refresh_proxies():
 
     print("    -> Filtering out offline proxies via TCP ping (this takes ~3 seconds)...")
     with concurrent.futures.ThreadPoolExecutor(max_workers=200) as executor:
-        # Increased batch size to 500 to ensure we get plenty of working IPs
-        results = list(executor.map(check_proxy, temp_pool[:500]))
+        results = list(executor.map(check_proxy, temp_pool[:1000]))
         
-    raw_proxy_pool = [r for r in results if r is not None]
-    print(f"    -> Retained {len(raw_proxy_pool)} verified online proxies for yt-dlp.")
+    tcp_alive_proxies = [r for r in results if r is not None]
+    raw_proxy_pool = get_youtube_verified_proxies(tcp_alive_proxies)
 
 def download_audio_ytdlp(vid_id, output_path, folder, proxy):
     base_out = output_path.rsplit('.', 1)[0]
@@ -103,9 +108,10 @@ def download_audio_ytdlp(vid_id, output_path, folder, proxy):
         "-x", "--audio-format", "opus",
         "--embed-metadata", 
         "--extractor-args", "youtube:player_client=ios,android",
-        "--socket-timeout", "30",         
-        "--retries", "10",                
-        "--fragment-retries", "10",       
+        "--concurrent-fragments", "5",    
+        "--socket-timeout", "15",         
+        "--retries", "3",                 
+        "--fragment-retries", "3",        
         "--no-check-certificates", 
         "--force-ipv4",             
         "--legacy-server-connect",  
@@ -123,12 +129,10 @@ def download_audio_ytdlp(vid_id, output_path, folder, proxy):
         if not error_output: 
             error_output = result.stdout.strip()
             
-        # 1. Check for permanent global deletions (Instant Fatal)
         fatal_errors = ["Private video", "removed by the uploader", "account has been terminated", "copyright claim"]
         if any(err in error_output for err in fatal_errors):
             return "FATAL_DELETED"
             
-        # 2. Check for regional geo-blocks (Requires strikes)
         geo_errors = ["This video is not available", "Video unavailable", "not available in your country"]
         if any(err in error_output for err in geo_errors):
             return "GEO_BLOCKED"
@@ -153,10 +157,7 @@ def git_commit_and_push(title):
     try:
         subprocess.run(['git', 'add', '-A'], check=True, stdout=subprocess.DEVNULL)
         subprocess.run(['git', 'commit', '-m', f"{title}"], check=True, stdout=subprocess.DEVNULL)
-        
-        # Pull and rebase remote changes to prevent "fetch first" rejection errors
         subprocess.run(['git', 'pull', '--rebase'], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        
         subprocess.run(['git', 'push'], check=True, stdout=subprocess.DEVNULL)
     except subprocess.CalledProcessError:
         pass
@@ -280,9 +281,6 @@ for playlist_id, playlist_name in playlist_ids.items():
 
         with open(dead_file, "r", encoding="utf-8") as f:
             dead_videos = f.read()
-# Process and download missing audio files
-        with open(dead_file, "r", encoding="utf-8") as f:
-            dead_videos = f.read()
 
         for vid_id, meta in sorted_current:
             safe_title = sanitize_filename(meta['title'])
@@ -297,8 +295,9 @@ for playlist_id, playlist_name in playlist_ids.items():
                 if vid_id in dead_videos:
                     continue
 
-                print(f"Missing Audio File: {detailed_name}")
-                success = False
+                print(f"Missing Audio File: {detailed_name} | https://www.youtube.com/watch?v={vid_id}")
+                file_start_time = datetime.datetime.now()
+                skip_hunting = False
                 
                 # Check cache first
                 for cached_proxy in list(working_proxies_cache):
@@ -308,46 +307,60 @@ for playlist_id, playlist_name in playlist_ids.items():
                     if res == "SUCCESS":
                         print(f"    -> Download complete: {output_path}")
                         git_commit_and_push(f"Add track: {detailed_name}")
-                        success = True
+                        skip_hunting = True
+                        break
+                    elif res == "FATAL_DELETED":
+                        print(f"    -> FATAL: Video was permanently deleted or made private. Skipping permanently.")
+                        with open(dead_file, "a", encoding="utf-8") as f:
+                            f.write(f"{vid_id} - {detailed_name}\n")
+                        skip_hunting = True 
                         break
                     else:
                         print("    -> Cached proxy failed or video is geo-blocked here. Removing from cache.")
                         working_proxies_cache.remove(cached_proxy)
                 
-                if success:
+                if skip_hunting:
                     continue
                 
                 # Proxy Hunting
                 unavailable_count = 0
+                success = False
                 for attempt in range(30):
-                    if not raw_proxy_pool: refresh_proxies()
+                    # Keep fetching until we successfully scrape YouTube-ready proxies
+                    while not raw_proxy_pool:
+                        refresh_proxies()
+                        
                     proxy = raw_proxy_pool.pop(0)
                     
-                    print(f"    -> (Attempt {attempt+1}/30) Testing proxy connection to YouTube: {proxy}")
                     print(f"    -> (Attempt {attempt+1}/30) Trying proxy: {proxy}")
-                    if not is_proxy_youtube_ready(proxy):
-                        print("        -> Proxy failed 3-second YouTube connection test. Skipping.")
-                        continue
                     res = download_audio_ytdlp(vid_id, output_path, folder, proxy=proxy)
                     
                     if res == "SUCCESS":
                         print(f"    -> Download complete: {output_path}")
                         git_commit_and_push(f"Add track: {detailed_name}")
-                        working_proxies_cache.append(proxy) # Save the golden IP
+                        working_proxies_cache.append(proxy) 
                         success = True
                         break
                         
-                    if res == "UNAVAILABLE":
+                    if res == "FATAL_DELETED":
+                        print(f"    -> FATAL: Video was permanently deleted or made private. Skipping permanently.")
+                        with open(dead_file, "a", encoding="utf-8") as f:
+                            f.write(f"{vid_id} - {detailed_name}\n")
+                        break
+                        
+                    if res == "GEO_BLOCKED":
                         unavailable_count += 1
-                        print(f"        -> Video unavailable in this proxy's region. (Count: {unavailable_count}/5)")
-                        if unavailable_count >= 5:
-                            print(f"    -> FATAL: Video unavailable across 5 different proxies. Skipping permanently.")
+                        print(f"        -> Video geo-blocked in this proxy's region. (Count: {unavailable_count}/3)")
+                        if unavailable_count >= 3:
+                            print(f"    -> FATAL: Video geo-blocked across 3 different proxies. Skipping permanently.")
                             with open(dead_file, "a", encoding="utf-8") as f:
                                 f.write(f"{vid_id} - {detailed_name}\n")
                             break
                         
-                if not success and unavailable_count < 3:
-                    print(f"ERROR: Could not download {detailed_name} after exhausting 50 proxy options.")
+                if not success and res != "FATAL_DELETED" and unavailable_count < 3:
+                    print(f"ERROR: Could not download {detailed_name} after exhausting 30 proxy options.")
+                    elapsed_secs = (datetime.datetime.now() - file_start_time).total_seconds()
+                    print(f"    -> Time elapsed before failing: {elapsed_secs:.2f} seconds")
 
         print(f"    -> Syncing exact playlist order (.m3u8) and logs for {playlist_name}...")
         git_commit_and_push(f"Sync {playlist_name} tracker and logs")
