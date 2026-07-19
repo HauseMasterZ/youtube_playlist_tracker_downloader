@@ -312,7 +312,9 @@ for playlist_id, playlist_name in playlist_ids.items():
                     elif res == "FATAL_DELETED":
                         print(f"    -> FATAL: Video was permanently deleted or made private. Skipping permanently.")
                         with open(dead_file, "a", encoding="utf-8") as f:
-                            f.write(f"{vid_id} - {detailed_name}\n")
+                            f.write(f"{vid_id} - {detailed_name} - https://www.youtube.com/watch?v={vid_id}\n")
+                        dead_videos += f"{vid_id}\n"  
+                        git_commit_and_push(f"Blacklist dead track: {detailed_name}")
                         skip_hunting = True 
                         break
                     else:
@@ -345,7 +347,9 @@ for playlist_id, playlist_name in playlist_ids.items():
                     if res == "FATAL_DELETED":
                         print(f"    -> FATAL: Video was permanently deleted or made private. Skipping permanently.")
                         with open(dead_file, "a", encoding="utf-8") as f:
-                            f.write(f"{vid_id} - {detailed_name}\n")
+                            f.write(f"{vid_id} - {detailed_name} - https://www.youtube.com/watch?v={vid_id}\n")
+                        dead_videos += f"{vid_id}\n"  
+                        git_commit_and_push(f"Blacklist dead track: {detailed_name}")
                         break
                         
                     if res == "GEO_BLOCKED":
@@ -354,7 +358,9 @@ for playlist_id, playlist_name in playlist_ids.items():
                         if unavailable_count >= 3:
                             print(f"    -> FATAL: Video geo-blocked across 3 different proxies. Skipping permanently.")
                             with open(dead_file, "a", encoding="utf-8") as f:
-                                f.write(f"{vid_id} - {detailed_name}\n")
+                                f.write(f"{vid_id} - {detailed_name} - https://www.youtube.com/watch?v={vid_id}\n")
+                            dead_videos += f"{vid_id}\n"  
+                            git_commit_and_push(f"Blacklist dead track: {detailed_name}")
                             break
                         
                 if not success and res != "FATAL_DELETED" and unavailable_count < 3:
