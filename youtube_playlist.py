@@ -94,12 +94,11 @@ def download_audio_ytdlp(vid_id, output_path, folder, proxy):
         "-x", "--audio-format", "opus",
         "--embed-metadata", 
         "--extractor-args", "youtube:player_client=android,web",
-        "--download-archive", f"{folder}/ytdlp_archive.txt",
+        # REMOVED: "--download-archive" because it conflicts with our Python file checks
         "--socket-timeout", "20",  
         "--retries", "1",          
         "--no-check-certificates", 
         "--proxy", proxy,
-        # REMOVED: "--quiet" and "--no-warnings" to expose the raw logs
         "-o", temp_out,
         f"https://www.youtube.com/watch?v={vid_id}"
     ]
