@@ -26,8 +26,8 @@ jobs:
 
       - name: Configure Git for Python
         run: |
-          git config user.name "github-actions"
-          git config user.email "actions@github.com"
+          git config user.name "HauseMasterZ"
+          git config user.email "113833707+HauseMasterZ@users.noreply.github.com"
           git lfs install
           git lfs track "*.opus"
           git add .gitattributes
