@@ -230,20 +230,25 @@ for playlist_id, playlist_name in playlist_ids.items():
 
         for vid_id, meta in current.items():
             safe_title = sanitize_filename(meta['title'])
+            safe_channel = sanitize_filename(meta['channel'])
+            
             if not safe_title:
                 safe_title = vid_id
+            if not safe_channel:
+                safe_channel = "Unknown"
             
-            output_path = f"{folder}/{safe_title}.opus"
+            detailed_name = f"{safe_title} - {safe_channel}"
+            output_path = f"{folder}/{detailed_name}.opus"
             
             if not os.path.exists(output_path):
-                print(f"Missing Audio File: {meta['title']}")
+                print(f"Missing Audio File: {detailed_name}")
                 success = False
                 
                 for cached_proxy in list(working_proxies_cache):
                     print(f"    -> Trying known good cached proxy: {cached_proxy}")
                     if download_audio_ytdlp(vid_id, output_path, folder, proxy=cached_proxy):
                         success = True
-                        git_commit_and_push(meta['title'])
+                        git_commit_and_push(detailed_name)
                         break
                     else:
                         print("    -> Cached proxy died. Removing from cache.")
@@ -263,11 +268,11 @@ for playlist_id, playlist_name in playlist_ids.items():
                     if download_audio_ytdlp(vid_id, output_path, folder, proxy=new_proxy):
                         success = True
                         working_proxies_cache.append(new_proxy)
-                        git_commit_and_push(meta['title'])
+                        git_commit_and_push(detailed_name)
                         break
                         
                 if not success:
-                    print(f"ERROR: Could not download {meta['title']} after exhausting all options.")
+                    print(f"ERROR: Could not download {detailed_name} after exhausting all options.")
 
     except Exception as e:
         print(f"Failed to process {playlist_name}: {e}")
