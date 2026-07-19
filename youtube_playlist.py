@@ -94,9 +94,9 @@ def download_audio_ytdlp(vid_id, output_path, folder, proxy):
         "-x", "--audio-format", "opus",
         "--embed-metadata", 
         "--extractor-args", "youtube:player_client=ios,android",
-        "--socket-timeout", "60",         # Increased: Wait up to 60s for a proxy to respond
-        "--retries", "10",                # Increased: Retry connection 10 times if it drops
-        "--fragment-retries", "10",       # Added: Retry downloading individual audio chunks
+        "--socket-timeout", "30",         
+        "--retries", "10",                
+        "--fragment-retries", "10",       
         "--no-check-certificates", 
         "--force-ipv4",             
         "--legacy-server-connect",  
@@ -106,8 +106,7 @@ def download_audio_ytdlp(vid_id, output_path, folder, proxy):
     ]
         
     try:
-        # MASSIVE TIMEOUT INCREASE: Allow up to 10 minutes (600s) for slow proxies to finish a song
-        result = subprocess.run(cmd, timeout=600, capture_output=True, text=True)
+        result = subprocess.run(cmd, timeout=180, capture_output=True, text=True)
         if os.path.exists(output_path):
             return "SUCCESS"
             
@@ -115,8 +114,15 @@ def download_audio_ytdlp(vid_id, output_path, folder, proxy):
         if not error_output: 
             error_output = result.stdout.strip()
             
-        if "Video unavailable" in error_output or "Private video" in error_output:
-            return "UNAVAILABLE"
+        # 1. Check for permanent global deletions (Instant Fatal)
+        fatal_errors = ["Private video", "removed by the uploader", "account has been terminated", "copyright claim"]
+        if any(err in error_output for err in fatal_errors):
+            return "FATAL_DELETED"
+            
+        # 2. Check for regional geo-blocks (Requires 5 strikes)
+        geo_errors = ["This video is not available", "Video unavailable", "not available in your country"]
+        if any(err in error_output for err in geo_errors):
+            return "GEO_BLOCKED"
             
         err_lines = [line for line in error_output.splitlines() if "ERROR:" in line]
         if err_lines:
@@ -304,7 +310,7 @@ for playlist_id, playlist_name in playlist_ids.items():
                 
                 # Proxy Hunting
                 unavailable_count = 0
-                for attempt in range(50):
+                for attempt in range(30):
                     if not raw_proxy_pool: refresh_proxies()
                     proxy = raw_proxy_pool.pop(0)
                     
