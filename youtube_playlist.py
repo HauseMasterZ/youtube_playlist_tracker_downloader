@@ -6,6 +6,8 @@ import sys
 import subprocess
 import random
 import urllib.request
+import concurrent.futures   # <--- ADD THIS
+import requests             # <--- ADD THIS
 from googleapiclient.discovery import build
 
 print("Installing required multi-threading and proxy libraries...")
