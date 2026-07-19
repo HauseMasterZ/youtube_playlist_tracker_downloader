@@ -6,13 +6,10 @@ import sys
 import subprocess
 import random
 import urllib.request
-import concurrent.futures
-import threading
 from googleapiclient.discovery import build
 
 print("Installing required multi-threading and proxy libraries...")
 subprocess.check_call([sys.executable, "-m", "pip", "install", "-U", "yt-dlp", "requests", "PySocks"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-import requests
 
 youtube_api_key = os.environ.get("YOUTUBE_API_KEY")
 if not youtube_api_key:
@@ -26,6 +23,9 @@ playlist_ids = {
 
 youtube = build('youtube', 'v3', developerKey=youtube_api_key)
 current_time = datetime.datetime.now()
+
+# Globals
+working_proxies_cache = []
 raw_proxy_pool = []
 
 def sanitize_filename(name):
@@ -222,7 +222,6 @@ for playlist_id, playlist_name in playlist_ids.items():
                 f.write(f"#EXTINF:-1,{meta['title']} - {meta['channel']}\n")
                 f.write(f"{safe_title} - {safe_channel}.opus\n")
 
-        # Load known dead videos
         with open(dead_file, "r", encoding="utf-8") as f:
             dead_videos = f.read()
 
@@ -242,12 +241,35 @@ for playlist_id, playlist_name in playlist_ids.items():
                 print(f"Missing Audio File: {detailed_name}")
                 success = False
                 
-                # Proxy ONLY execution
-                for attempt in range(5):
+                # Check cache first
+                for cached_proxy in list(working_proxies_cache):
+                    print(f"    -> Trying known good cached proxy: {cached_proxy}")
+                    res = download_audio_ytdlp(vid_id, output_path, folder, proxy=cached_proxy)
+                    
+                    if res == "SUCCESS":
+                        print(f"    -> Download complete: {output_path}")
+                        git_commit_and_push(f"Add track: {detailed_name}")
+                        success = True
+                        break
+                    elif res == "UNAVAILABLE":
+                        print(f"    -> FATAL: Video is unavailable on YouTube. Skipping permanently.")
+                        with open(dead_file, "a", encoding="utf-8") as f:
+                            f.write(f"{vid_id} - {detailed_name}\n")
+                        success = True # Technically not success, but allows loop to skip proxy search
+                        break
+                    else:
+                        print("    -> Cached proxy failed. Removing from cache.")
+                        working_proxies_cache.remove(cached_proxy)
+                
+                if success:
+                    continue
+                
+                # Proxy Hunting
+                for attempt in range(25):
                     if not raw_proxy_pool: refresh_proxies()
                     proxy = raw_proxy_pool.pop(0)
                     
-                    print(f"    -> (Attempt {attempt+1}/5) Trying proxy: {proxy}")
+                    print(f"    -> (Attempt {attempt+1}/25) Trying proxy: {proxy}")
                     res = download_audio_ytdlp(vid_id, output_path, folder, proxy=proxy)
                     
                     if res == "UNAVAILABLE":
@@ -259,6 +281,7 @@ for playlist_id, playlist_name in playlist_ids.items():
                     if res == "SUCCESS":
                         print(f"    -> Download complete: {output_path}")
                         git_commit_and_push(f"Add track: {detailed_name}")
+                        working_proxies_cache.append(proxy) # Save the golden IP
                         success = True
                         break
                         
