@@ -90,12 +90,12 @@ def download_audio_ytdlp(vid_id, output_path, folder, proxy):
     
     cmd = [
         sys.executable, "-m", "yt_dlp",
-        "-f", "bestaudio",
+        "-f", "bestaudio/best",
         "-x", "--audio-format", "opus",
         "--embed-metadata", 
-        "--extractor-args", "youtube:player_client=android,web",
-        # REMOVED: "--download-archive" because it conflicts with our Python file checks
-        "--socket-timeout", "20",  
+        # CRITICAL FIX: Dropped 'web' client. Spoofing 'ios' and 'android' bypasses the new bot-checks.
+        "--extractor-args", "youtube:player_client=ios,android",
+        "--socket-timeout", "15",  # Drop timeout to fail faster on bad proxies
         "--retries", "1",          
         "--no-check-certificates", 
         "--proxy", proxy,
@@ -104,7 +104,8 @@ def download_audio_ytdlp(vid_id, output_path, folder, proxy):
     ]
         
     try:
-        result = subprocess.run(cmd, timeout=90, capture_output=True, text=True)
+        # Reduced overall timeout so we don't wait on hanging proxies
+        result = subprocess.run(cmd, timeout=60, capture_output=True, text=True)
         if os.path.exists(output_path):
             return "SUCCESS"
             
@@ -115,15 +116,19 @@ def download_audio_ytdlp(vid_id, output_path, folder, proxy):
         if "Video unavailable" in error_output or "Private video" in error_output:
             return "UNAVAILABLE"
             
-        # Scan for the actual ERROR line in the verbose output
+        # Clean up the output to just show the core error without the GitHub link spam
         err_lines = [line for line in error_output.splitlines() if "ERROR:" in line]
-        final_err = err_lines[-1] if err_lines else (error_output.splitlines()[-1] if error_output else "Unknown/Empty output.")
+        if err_lines:
+            # Slices off the generic "please report this issue on github" text
+            final_err = err_lines[-1].split("; please report this issue")[0]
+            print(f"        -> yt-dlp Raw Error: {final_err}")
+        else:
+            print("        -> yt-dlp Error: Unknown/Empty output (Connection dropped).")
         
-        print(f"        -> yt-dlp Raw Error: {final_err}")
         return "FAILED"
         
     except subprocess.TimeoutExpired:
-        print("        -> yt-dlp Error: Process timed out (Proxy too slow).")
+        print("        -> yt-dlp Error: Process timed out (Proxy hung up).")
         return "FAILED"
     except Exception as e:
         print(f"        -> yt-dlp Error: {str(e)}")
