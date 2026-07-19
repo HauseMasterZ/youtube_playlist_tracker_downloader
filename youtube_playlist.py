@@ -106,7 +106,7 @@ def download_audio_ytdlp(vid_id, output_path, folder, proxy):
     ]
         
     try:
-        result = subprocess.run(cmd, timeout=180, capture_output=True, text=True)
+        result = subprocess.run(cmd, timeout=120, capture_output=True, text=True)
         if os.path.exists(output_path):
             return "SUCCESS"
             
@@ -134,7 +134,7 @@ def download_audio_ytdlp(vid_id, output_path, folder, proxy):
         return "FAILED"
         
     except subprocess.TimeoutExpired:
-        print("        -> yt-dlp Error: Process timed out (Proxy took longer than 10 minutes).")
+        print("        -> yt-dlp Error: Process timed out (Proxy took longer than 2 minutes).")
         return "FAILED"
     except Exception as e:
         print(f"        -> yt-dlp Error: {str(e)}")
@@ -314,7 +314,7 @@ for playlist_id, playlist_name in playlist_ids.items():
                     if not raw_proxy_pool: refresh_proxies()
                     proxy = raw_proxy_pool.pop(0)
                     
-                    print(f"    -> (Attempt {attempt+1}/50) Trying proxy: {proxy}")
+                    print(f"    -> (Attempt {attempt+1}/30) Trying proxy: {proxy}")
                     res = download_audio_ytdlp(vid_id, output_path, folder, proxy=proxy)
                     
                     if res == "SUCCESS":
