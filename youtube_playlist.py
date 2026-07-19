@@ -8,6 +8,7 @@ import subprocess
 import random
 import urllib.request
 import concurrent.futures
+import threading
 from googleapiclient.discovery import build
 
 print("Installing required multi-threading and proxy libraries...")
@@ -27,34 +28,46 @@ playlist_ids = {
 youtube = build('youtube', 'v3', developerKey=youtube_api_key)
 current_time = datetime.datetime.now()
 
+# Global caches
 working_proxies_cache = []
+raw_proxy_pool = []
 
 def sanitize_filename(name):
     return re.sub(r'[\\/*?:"<>|]', "", name)
 
 def get_working_proxy(vid_id):
-    print("    -> Scraping thousands of free proxies (HTTP/SOCKS4/SOCKS5)...")
-    urls = [
-        "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/socks5.txt",
-        "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/socks4.txt",
-        "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt"
-    ]
-    proxies = []
-    for url in urls:
-        try:
-            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-            with urllib.request.urlopen(req, timeout=10) as response:
-                ptype = url.split('/')[-1].replace('.txt', '')
-                for line in response.read().decode('utf-8').splitlines():
-                    if line.strip():
-                        proxies.append(f"{ptype}://{line.strip()}")
-        except Exception:
-            pass
+    global raw_proxy_pool
+    
+    if not raw_proxy_pool:
+        print("    -> Downloading fresh master proxy list from GitHub...")
+        urls = [
+            "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/socks5.txt",
+            "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/socks4.txt",
+            "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt"
+        ]
+        for url in urls:
+            try:
+                req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+                with urllib.request.urlopen(req, timeout=10) as response:
+                    ptype = url.split('/')[-1].replace('.txt', '')
+                    for line in response.read().decode('utf-8').splitlines():
+                        if line.strip():
+                            raw_proxy_pool.append(f"{ptype}://{line.strip()}")
+            except Exception:
+                pass
+        random.shuffle(raw_proxy_pool)
 
-    random.shuffle(proxies)
-    print(f"    -> Rapidly testing {len(proxies)} proxies concurrently (5-second timeout limit)...")
+    # Slice off a batch of 300 and remove them from the master pool so we never test duds twice
+    batch = raw_proxy_pool[:300]
+    raw_proxy_pool = raw_proxy_pool[300:]
+    
+    print(f"    -> Rapidly testing {len(batch)} proxies concurrently...")
+    
+    stop_event = threading.Event()
 
     def test_proxy(proxy):
+        if stop_event.is_set():
+            return None
         try:
             test_url = f"https://www.youtube.com/watch?v={vid_id}"
             res = requests.get(
@@ -64,12 +77,14 @@ def get_working_proxy(vid_id):
                 headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
             )
             if res.status_code == 200 and "Sign in to confirm" not in res.text:
+                stop_event.set() # Instantly kill all other threads to save CPU
                 return proxy
         except Exception:
             return None
+        return None
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=150) as executor:
-        futures = {executor.submit(test_proxy, p): p for p in proxies[:300]}
+        futures = {executor.submit(test_proxy, p): p for p in batch}
         for future in concurrent.futures.as_completed(futures):
             result = future.result()
             if result:
@@ -78,7 +93,7 @@ def get_working_proxy(vid_id):
                 
     return None
 
-def download_audio_ytdlp(vid_id, output_path, proxy=None):
+def download_audio_ytdlp(vid_id, output_path, folder, proxy=None):
     base_out = output_path.rsplit('.', 1)[0]
     temp_out = f"{base_out}.%(ext)s"
     
@@ -86,6 +101,7 @@ def download_audio_ytdlp(vid_id, output_path, proxy=None):
         sys.executable, "-m", "yt_dlp",
         "-x", "--audio-format", "opus", "--audio-quality", "96K",
         "--extractor-args", "youtube:player_client=tv,android,web",
+        "--download-archive", f"{folder}/ytdlp_archive.txt",
         "--socket-timeout", "20",
         "--retries", "0",
         "--quiet", "--no-warnings",
@@ -97,8 +113,6 @@ def download_audio_ytdlp(vid_id, output_path, proxy=None):
         cmd.extend(["--proxy", proxy])
         
     try:
-        # Reduced from 600 seconds to 90 seconds. 
-        # If the proxy cannot download a 3MB file in 1.5 minutes, kill it.
         result = subprocess.run(cmd, timeout=90, capture_output=True, text=True)
         
         if os.path.exists(output_path):
@@ -114,16 +128,15 @@ def download_audio_ytdlp(vid_id, output_path, proxy=None):
         print("    -> Process timed out (Proxy was too slow, took longer than 90 seconds).")
         return False
 
-def git_commit_and_push(file_path, title):
+def git_commit_and_push(title):
     print(f"    -> Committing and pushing '{title}' to repository...")
     try:
-        subprocess.run(['git', 'add', file_path], check=True, stdout=subprocess.DEVNULL)
-        subprocess.run(['git', 'add', '*.txt', '*.p'], check=True, stdout=subprocess.DEVNULL)
+        subprocess.run(['git', 'add', '-A'], check=True, stdout=subprocess.DEVNULL)
         subprocess.run(['git', 'commit', '-m', f"Add track: {title}"], check=True, stdout=subprocess.DEVNULL)
         subprocess.run(['git', 'push'], check=True, stdout=subprocess.DEVNULL)
         print("    -> Successfully pushed to GitHub.")
-    except subprocess.CalledProcessError as e:
-        print(f"    -> Git push failed (may have timed out or had no changes): {e}")
+    except subprocess.CalledProcessError:
+        print(f"    -> Git push skipped (no changes detected).")
 
 for playlist_id, playlist_name in playlist_ids.items():
     try:
@@ -228,9 +241,9 @@ for playlist_id, playlist_name in playlist_ids.items():
                 
                 for cached_proxy in list(working_proxies_cache):
                     print(f"    -> Trying known good cached proxy: {cached_proxy}")
-                    if download_audio_ytdlp(vid_id, output_path, proxy=cached_proxy):
+                    if download_audio_ytdlp(vid_id, output_path, folder, proxy=cached_proxy):
                         success = True
-                        git_commit_and_push(output_path, meta['title'])
+                        git_commit_and_push(meta['title'])
                         break
                     else:
                         print("    -> Cached proxy died. Removing from cache.")
@@ -244,13 +257,13 @@ for playlist_id, playlist_name in playlist_ids.items():
                     new_proxy = get_working_proxy(vid_id)
                     
                     if not new_proxy:
-                        print("    -> Could not find a verified proxy in this batch.")
+                        print("    -> Could not find a verified proxy in this batch. Trying next batch...")
                         continue
                         
-                    if download_audio_ytdlp(vid_id, output_path, proxy=new_proxy):
+                    if download_audio_ytdlp(vid_id, output_path, folder, proxy=new_proxy):
                         success = True
-                        working_proxies_cache.append(new_proxy) 
-                        git_commit_and_push(output_path, meta['title'])
+                        working_proxies_cache.append(new_proxy)
+                        git_commit_and_push(meta['title'])
                         break
                         
                 if not success:
