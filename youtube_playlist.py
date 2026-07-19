@@ -99,14 +99,12 @@ def download_audio_ytdlp(vid_id, output_path, folder, proxy=None):
     
     cmd = [
         sys.executable, "-m", "yt_dlp",
-        "-f", "bestaudio[acodec=opus]/bestaudio",
-        "-x", "--audio-format", "opus",
+        "-x", "--audio-format", "opus", "--audio-quality", "96K",
         "--embed-metadata", 
         "--extractor-args", "youtube:player_client=tv,android,web",
         "--download-archive", f"{folder}/ytdlp_archive.txt",
-        "--socket-timeout", "30",
-        "--retries", "3",
-        "--fragment-retries", "3",
+        "--socket-timeout", "20",
+        "--retries", "0",
         "--quiet", "--no-warnings",
         "-o", temp_out,
         f"https://www.youtube.com/watch?v={vid_id}"
