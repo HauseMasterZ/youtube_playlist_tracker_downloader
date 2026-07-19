@@ -99,7 +99,8 @@ def download_audio_ytdlp(vid_id, output_path, folder, proxy=None):
     
     cmd = [
         sys.executable, "-m", "yt_dlp",
-        "-x", "--audio-format", "opus", "--audio-quality", "96K",
+        "-f", "bestaudio[acodec=opus]/bestaudio",
+        "-x", "--audio-format", "opus",
         "--embed-metadata", 
         "--extractor-args", "youtube:player_client=tv,android,web",
         "--download-archive", f"{folder}/ytdlp_archive.txt",
