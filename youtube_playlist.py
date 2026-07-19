@@ -93,11 +93,11 @@ def download_audio_ytdlp(vid_id, output_path, folder, proxy):
         "-f", "bestaudio",
         "-x", "--audio-format", "opus",
         "--embed-metadata", 
-        "--extractor-args", "youtube:player_client=tv,android,web",
+        "--extractor-args", "youtube:player_client=android,web", # Removed 'tv' client as it currently triggers aggressive blocking
         "--download-archive", f"{folder}/ytdlp_archive.txt",
-        "--socket-timeout", "15",  # Reduced so bad proxies fail out instantly
-        "--retries", "1",          # Don't waste time retrying on a dead IP
-        "--no-check-certificates", # Stop free proxies from failing SSL handshakes
+        "--socket-timeout", "20",  
+        "--retries", "1",          
+        "--no-check-certificates", 
         "--proxy", proxy,
         "--quiet", "--no-warnings",
         "-o", temp_out,
@@ -108,12 +108,24 @@ def download_audio_ytdlp(vid_id, output_path, folder, proxy):
         result = subprocess.run(cmd, timeout=90, capture_output=True, text=True)
         if os.path.exists(output_path):
             return "SUCCESS"
-        if "Video unavailable" in result.stderr or "Private video" in result.stderr:
-            return "UNAVAILABLE"
+            
+        # Expose the exact error message from yt-dlp to the console
+        err_lines = result.stderr.strip().splitlines()
+        if err_lines:
+            error_msg = err_lines[-1]
+            if "Video unavailable" in error_msg or "Private video" in error_msg:
+                return "UNAVAILABLE"
+            print(f"        -> yt-dlp Error: {error_msg}")
+        else:
+            print("        -> yt-dlp Error: Unknown proxy failure (Connection dropped).")
+            
         return "FAILED"
+        
     except subprocess.TimeoutExpired:
+        print("        -> yt-dlp Error: Process timed out (Proxy too slow).")
         return "FAILED"
-    except Exception:
+    except Exception as e:
+        print(f"        -> yt-dlp Error: {str(e)}")
         return "FAILED"
 
 def git_commit_and_push(title):
