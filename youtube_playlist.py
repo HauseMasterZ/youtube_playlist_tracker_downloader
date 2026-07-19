@@ -104,8 +104,9 @@ def download_audio_ytdlp(vid_id, output_path, folder, proxy=None):
         "--embed-metadata", 
         "--extractor-args", "youtube:player_client=tv,android,web",
         "--download-archive", f"{folder}/ytdlp_archive.txt",
-        "--socket-timeout", "20",
-        "--retries", "0",
+        "--socket-timeout", "30",
+        "--retries", "3",
+        "--fragment-retries", "3",
         "--quiet", "--no-warnings",
         "-o", temp_out,
         f"https://www.youtube.com/watch?v={vid_id}"
@@ -115,19 +116,21 @@ def download_audio_ytdlp(vid_id, output_path, folder, proxy=None):
         cmd.extend(["--proxy", proxy])
         
     try:
-        result = subprocess.run(cmd, timeout=90, capture_output=True, text=True)
+        # Increased timeout to 120s to allow for slow proxy handshake
+        result = subprocess.run(cmd, timeout=120, capture_output=True, text=True)
         
         if os.path.exists(output_path):
             print(f"    -> Download complete: {output_path}")
             return True
         else:
+            # More descriptive error capture
             err_lines = result.stderr.strip().splitlines()
             error_msg = err_lines[-1] if err_lines else "Unknown connection error"
             print(f"    -> yt-dlp Failed: {error_msg}")
             return False
             
     except subprocess.TimeoutExpired:
-        print("    -> Process timed out (Proxy was too slow, took longer than 90 seconds).")
+        print("    -> Process timed out (Proxy was too slow, took longer than 120 seconds).")
         return False
 
 def git_commit_and_push(title):
