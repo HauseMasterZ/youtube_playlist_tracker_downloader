@@ -65,17 +65,21 @@ def refresh_proxies():
 
     random.shuffle(temp_pool)
     
-    # Concurrent pre-filter: Only keep proxies that are actually online
+    # Protocol-agnostic socket check (Preserves SOCKS proxies!)
+    import socket
     def check_proxy(p):
         try:
-            requests.get("https://www.youtube.com", proxies={"http": p, "https": p}, timeout=3)
-            return p
-        except: return None
+            ip, port = p.split("://")[1].split(":")
+            # Simple TCP ping to see if the server is alive
+            with socket.create_connection((ip, int(port)), timeout=2):
+                return p
+        except: 
+            return None
 
-    print("    -> Filtering out offline proxies (this takes ~3 seconds)...")
+    print("    -> Filtering out offline proxies via TCP ping (this takes ~3 seconds)...")
     with concurrent.futures.ThreadPoolExecutor(max_workers=200) as executor:
-        # Test a batch of 400 to find enough working ones quickly
-        results = list(executor.map(check_proxy, temp_pool[:400]))
+        # Increased batch size to 500 to ensure we get plenty of working IPs
+        results = list(executor.map(check_proxy, temp_pool[:500]))
         
     raw_proxy_pool = [r for r in results if r is not None]
     print(f"    -> Retained {len(raw_proxy_pool)} verified online proxies for yt-dlp.")
