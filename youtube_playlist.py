@@ -9,7 +9,16 @@ import urllib.request
 import concurrent.futures   # <--- ADD THIS
 import requests             # <--- ADD THIS
 from googleapiclient.discovery import build
+import requests
 
+def is_proxy_youtube_ready(proxy):
+    # Tests if the proxy can actually reach YouTube in under 3 seconds
+    try:
+        proxies = {"http": proxy, "https": proxy}
+        res = requests.get("https://www.youtube.com/generate_204", proxies=proxies, timeout=3)
+        return res.status_code == 204
+    except:
+        return False
 print("Installing required multi-threading and proxy libraries...")
 subprocess.check_call([sys.executable, "-m", "pip", "install", "-U", "yt-dlp", "requests", "PySocks"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
@@ -119,7 +128,7 @@ def download_audio_ytdlp(vid_id, output_path, folder, proxy):
         if any(err in error_output for err in fatal_errors):
             return "FATAL_DELETED"
             
-        # 2. Check for regional geo-blocks (Requires 5 strikes)
+        # 2. Check for regional geo-blocks (Requires strikes)
         geo_errors = ["This video is not available", "Video unavailable", "not available in your country"]
         if any(err in error_output for err in geo_errors):
             return "GEO_BLOCKED"
@@ -314,7 +323,11 @@ for playlist_id, playlist_name in playlist_ids.items():
                     if not raw_proxy_pool: refresh_proxies()
                     proxy = raw_proxy_pool.pop(0)
                     
+                    print(f"    -> (Attempt {attempt+1}/30) Testing proxy connection to YouTube: {proxy}")
                     print(f"    -> (Attempt {attempt+1}/30) Trying proxy: {proxy}")
+                    if not is_proxy_youtube_ready(proxy):
+                        print("        -> Proxy failed 3-second YouTube connection test. Skipping.")
+                        continue
                     res = download_audio_ytdlp(vid_id, output_path, folder, proxy=proxy)
                     
                     if res == "SUCCESS":
@@ -333,7 +346,7 @@ for playlist_id, playlist_name in playlist_ids.items():
                                 f.write(f"{vid_id} - {detailed_name}\n")
                             break
                         
-                if not success and unavailable_count < 5:
+                if not success and unavailable_count < 3:
                     print(f"ERROR: Could not download {detailed_name} after exhausting 50 proxy options.")
 
         print(f"    -> Syncing exact playlist order (.m3u8) and logs for {playlist_name}...")
