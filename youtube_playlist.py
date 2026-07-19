@@ -99,12 +99,14 @@ def download_audio_ytdlp(vid_id, output_path, folder, proxy=None):
     
     cmd = [
         sys.executable, "-m", "yt_dlp",
-        "-x", "--audio-format", "opus", "--audio-quality", "96K",
+        "-f", "bestaudio",              # Get the highest quality stream, regardless of source codec
+        "-x", "--audio-format", "opus", # Remux (copy) if source is Opus, convert if it's not
         "--embed-metadata", 
         "--extractor-args", "youtube:player_client=tv,android,web",
         "--download-archive", f"{folder}/ytdlp_archive.txt",
-        "--socket-timeout", "20",
-        "--retries", "0",
+        "--socket-timeout", "30",
+        "--retries", "3",
+        "--fragment-retries", "3",
         "--quiet", "--no-warnings",
         "-o", temp_out,
         f"https://www.youtube.com/watch?v={vid_id}"
