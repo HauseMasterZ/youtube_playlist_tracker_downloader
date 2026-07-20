@@ -353,16 +353,16 @@ for playlist_id, playlist_name in playlist_ids.items():
                         
                     if res == "GEO_BLOCKED":
                         unavailable_count += 1
-                        print(f"        -> Video geo-blocked in this proxy's region. (Count: {unavailable_count}/3)")
-                        if unavailable_count >= 3:
-                            print(f"    -> FATAL: Video geo-blocked across 3 different proxies. Skipping permanently.")
+                        print(f"        -> Video geo-blocked in this proxy's region. (Count: {unavailable_count}/5)")
+                        if unavailable_count >= 5:
+                            print(f"    -> FATAL: Video geo-blocked across 5 different proxies. Skipping permanently.")
                             with open(dead_file, "a", encoding="utf-8") as f:
                                 f.write(f"{vid_id} - {detailed_name} - https://www.youtube.com/watch?v={vid_id}\n")
                             dead_videos += f"{vid_id}\n"  
                             git_commit_and_push(f"Blacklist dead track: {detailed_name}")
                             break
                         
-                if not success and res != "FATAL_DELETED" and unavailable_count < 3:
+                if not success and res != "FATAL_DELETED" and unavailable_count < 5:
                     print(f"ERROR: Could not download {detailed_name} after exhausting 30 proxy options.")
                     elapsed_secs = (datetime.datetime.now() - file_start_time).total_seconds()
                     print(f"    -> Time elapsed before failing: {elapsed_secs:.2f} seconds")
