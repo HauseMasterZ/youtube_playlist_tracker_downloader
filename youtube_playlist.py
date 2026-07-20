@@ -10,6 +10,18 @@ import concurrent.futures
 import requests
 import socket
 from googleapiclient.discovery import build
+import time
+
+def execute_with_retry(api_request, max_retries=5):
+    """Executes a Google API request with a built-in retry loop for transient SSL/Network errors."""
+    for attempt in range(max_retries):
+        try:
+            return api_request.execute()
+        except Exception as e:
+            if attempt == max_retries - 1:
+                raise e
+            print(f"        -> Google API connection dropped ({e}). Retrying in 5 seconds... ({attempt + 1}/{max_retries})")
+            time.sleep(5)
 
 print("Installing required multi-threading and proxy libraries...")
 subprocess.check_call([sys.executable, "-m", "pip", "install", "-U", "yt-dlp", "requests", "PySocks"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -188,7 +200,8 @@ for playlist_id, playlist_name in playlist_ids.items():
                 playlistId = playlist_id,
                 maxResults = 50,
                 pageToken  = nextPageToken
-            ).execute()
+            )
+            pl_response = execute_with_retry(request)
             
             if not pl_response.get('items'):
                 break
@@ -204,7 +217,8 @@ for playlist_id, playlist_name in playlist_ids.items():
                 part       = "snippet, contentDetails",
                 id         = ','.join(vid_ids),
                 maxResults = 50
-            ).execute()
+            )
+            vid_response = execute_with_retry(request)
 
             for item in vid_response['items']:
                 vid_id = item['id']
