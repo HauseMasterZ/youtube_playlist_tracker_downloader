@@ -9,8 +9,9 @@ import urllib.request
 import concurrent.futures
 import requests
 import socket
-from googleapiclient.discovery import build
 import time
+import traceback
+from googleapiclient.discovery import build
 
 def execute_with_retry(api_request, max_retries=5):
     """Executes a Google API request with a built-in retry loop for transient SSL/Network errors."""
@@ -195,7 +196,8 @@ for playlist_id, playlist_name in playlist_ids.items():
         nextPageToken = None
 
         while True:
-            pl_response = youtube.playlistItems().list(
+            # FIX: Assigned strictly to `request` prior to execution.
+            request = youtube.playlistItems().list(
                 part       = 'contentDetails',
                 playlistId = playlist_id,
                 maxResults = 50,
@@ -213,7 +215,8 @@ for playlist_id, playlist_name in playlist_ids.items():
                 if vid_id not in track_map:
                     track_map[vid_id] = len(track_map) + 1
 
-            vid_response = youtube.videos().list(
+            # FIX: Assigned strictly to `request` prior to execution.
+            request = youtube.videos().list(
                 part       = "snippet, contentDetails",
                 id         = ','.join(vid_ids),
                 maxResults = 50
@@ -320,7 +323,6 @@ for playlist_id, playlist_name in playlist_ids.items():
                     
                     if res == "SUCCESS":
                         print(f"    -> Download complete: {output_path}")
-                        git_commit_and_push(f"Add track: {detailed_name}")
                         skip_hunting = True
                         break
                     elif res == "FATAL_DELETED":
@@ -328,7 +330,6 @@ for playlist_id, playlist_name in playlist_ids.items():
                         with open(dead_file, "a", encoding="utf-8") as f:
                             f.write(f"{vid_id} - {detailed_name} - https://www.youtube.com/watch?v={vid_id}\n")
                         dead_videos += f"{vid_id}\n"  
-                        git_commit_and_push(f"Blacklist dead track: {detailed_name}")
                         skip_hunting = True 
                         break
                     else:
@@ -341,9 +342,16 @@ for playlist_id, playlist_name in playlist_ids.items():
                 unavailable_count = 0
                 success = False
                 for attempt in range(30):
-                    # Keep fetching until we successfully scrape YouTube-ready proxies
-                    while not raw_proxy_pool:
+                    
+                    # FIX: Cap proxy refresh loops to prevent hard lockups
+                    proxy_refresh_attempts = 0
+                    while not raw_proxy_pool and proxy_refresh_attempts < 3:
                         refresh_proxies()
+                        proxy_refresh_attempts += 1
+                        
+                    if not raw_proxy_pool:
+                        print("    -> ERROR: Exhausted proxy sources. Network block or rate-limit active. Skipping track.")
+                        break
                         
                     proxy = raw_proxy_pool.pop(0)
                     
@@ -352,7 +360,6 @@ for playlist_id, playlist_name in playlist_ids.items():
                     
                     if res == "SUCCESS":
                         print(f"    -> Download complete: {output_path}")
-                        git_commit_and_push(f"Add track: {detailed_name}")
                         working_proxies_cache.append(proxy) 
                         success = True
                         break
@@ -362,7 +369,6 @@ for playlist_id, playlist_name in playlist_ids.items():
                         with open(dead_file, "a", encoding="utf-8") as f:
                             f.write(f"{vid_id} - {detailed_name} - https://www.youtube.com/watch?v={vid_id}\n")
                         dead_videos += f"{vid_id}\n"  
-                        git_commit_and_push(f"Blacklist dead track: {detailed_name}")
                         break
                         
                     if res == "GEO_BLOCKED":
@@ -373,17 +379,19 @@ for playlist_id, playlist_name in playlist_ids.items():
                             with open(dead_file, "a", encoding="utf-8") as f:
                                 f.write(f"{vid_id} - {detailed_name} - https://www.youtube.com/watch?v={vid_id}\n")
                             dead_videos += f"{vid_id}\n"  
-                            git_commit_and_push(f"Blacklist dead track: {detailed_name}")
                             break
                         
                 if not success and res != "FATAL_DELETED" and unavailable_count < 4:
-                    print(f"ERROR: Could not download {detailed_name} after exhausting 30 proxy options.")
+                    print(f"ERROR: Could not download {detailed_name} after exhausting proxy options.")
                     elapsed_secs = (datetime.datetime.now() - file_start_time).total_seconds()
                     print(f"    -> Time elapsed before failing: {elapsed_secs:.2f} seconds")
 
+        # FIX: Pushing aggregated changes once per playlist, not per track.
         print(f"    -> Syncing exact playlist order (.m3u8) and logs for {playlist_name}...")
-        git_commit_and_push(f"Sync {playlist_name} tracker and logs")
+        git_commit_and_push(f"Sync {playlist_name} tracker, logs, and new audio files")
 
     except Exception as e:
+        # FIX: Exposed the traceback so you aren't guessing where your code broke.
         print(f"Failed to process {playlist_name}: {e}")
+        traceback.print_exc()
         continue
