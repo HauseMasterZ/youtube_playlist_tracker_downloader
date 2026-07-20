@@ -382,7 +382,15 @@ for playlist_id, playlist_name in playlist_ids.items():
                             f.write(f"{vid_id} - {detailed_name} - https://www.youtube.com/watch?v={vid_id}\n")
                         dead_videos += f"{vid_id}\n"  
                         break
-                        
+
+                    # Insert this inside the `for attempt in range(30):` loop, right below `if res == "FATAL_DELETED":`
+                    if res == "FATAL_AGE_RESTRICTED":
+                        print(f"    -> FATAL: Video is age-restricted. Proxies cannot bypass logins. Skipping permanently.")
+                        with open(dead_file, "a", encoding="utf-8") as f:
+                            f.write(f"{vid_id} - {detailed_name} - https://www.youtube.com/watch?v={vid_id} (Reason: Age Restricted)\n")
+                        dead_videos += f"{vid_id}\n"  
+                        break
+                    
                     if res == "GEO_BLOCKED":
                         unavailable_count += 1
                         print(f"        -> Video geo-blocked in this proxy's region. (Count: {unavailable_count}/5)")
