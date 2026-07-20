@@ -145,6 +145,10 @@ def download_audio_ytdlp(vid_id, output_path, folder, proxy):
         fatal_errors = ["Private video", "removed by the uploader", "account has been terminated", "copyright claim"]
         if any(err in error_output for err in fatal_errors):
             return "FATAL_DELETED"
+
+        age_errors = ["Sign in to confirm your age", "age-restricted"]
+        if any(err in error_output for err in age_errors):
+            return "FATAL_AGE_RESTRICTED"
             
         geo_errors = ["This video is not available", "Video unavailable", "not available in your country"]
         if any(err in error_output for err in geo_errors):
@@ -330,6 +334,14 @@ for playlist_id, playlist_name in playlist_ids.items():
                         with open(dead_file, "a", encoding="utf-8") as f:
                             f.write(f"{vid_id} - {detailed_name} - https://www.youtube.com/watch?v={vid_id}\n")
                         dead_videos += f"{vid_id}\n"  
+                        skip_hunting = True 
+                        break
+                    # Insert this inside the `for cached_proxy in list(working_proxies_cache):` loop
+                    elif res == "FATAL_AGE_RESTRICTED":
+                        print(f"    -> FATAL: Video is age-restricted. Proxies cannot bypass logins. Skipping permanently.")
+                        with open(dead_file, "a", encoding="utf-8") as f:
+                            f.write(f"{vid_id} - {detailed_name} - https://www.youtube.com/watch?v={vid_id} (Reason: Age Restricted)\n")
+                        dead_videos += f"{vid_id}\n"
                         skip_hunting = True 
                         break
                     else:
