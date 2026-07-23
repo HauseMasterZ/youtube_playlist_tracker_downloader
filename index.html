@@ -3,35 +3,331 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Music Player</title>
-    <link rel="stylesheet" href="style.css">
+    <title>Web Player</title>
+    <style>
+        :root {
+            --bg-color: #121212;
+            --surface-color: #1e1e1e;
+            --primary-color: #bb86fc;
+            --text-primary: #ffffff;
+            --text-secondary: #b3b3b3;
+            --hover-color: #2c2c2c;
+            --active-color: #383838;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .player-container {
+            width: 100%;
+            max-width: 400px;
+            background-color: var(--surface-color);
+            border-radius: 16px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            max-height: 90vh;
+        }
+
+        .header {
+            padding: 16px;
+            background-color: var(--surface-color);
+            border-bottom: 1px solid var(--hover-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        select {
+            width: 100%;
+            padding: 10px;
+            background-color: var(--hover-color);
+            color: var(--text-primary);
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            outline: none;
+            cursor: pointer;
+        }
+
+        .now-playing {
+            padding: 24px 20px;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        #album-art-image {
+            width: 200px;
+            height: 200px;
+            border-radius: 12px;
+            object-fit: cover;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+            display: none; /* Hidden until loaded */
+            background-color: var(--hover-color);
+        }
+
+        #current-title {
+            font-size: 20px;
+            font-weight: 600;
+            margin: 0 0 8px 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            width: 100%;
+        }
+
+        #current-channel {
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin: 0 0 20px 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            width: 100%;
+        }
+
+        audio {
+            width: 100%;
+            outline: none;
+        }
+
+        /* Custom Audio Player Styling for Webkit */
+        audio::-webkit-media-controls-panel {
+            background-color: var(--hover-color);
+        }
+        audio::-webkit-media-controls-current-time-display,
+        audio::-webkit-media-controls-time-remaining-display {
+            color: var(--text-primary);
+        }
+
+        .playlist-container {
+            flex-grow: 1;
+            overflow-y: auto;
+            border-top: 1px solid var(--hover-color);
+        }
+
+        /* Scrollbar Styling */
+        .playlist-container::-webkit-scrollbar {
+            width: 8px;
+        }
+        .playlist-container::-webkit-scrollbar-thumb {
+            background-color: var(--active-color);
+            border-radius: 4px;
+        }
+
+        #track-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        #track-list li {
+            padding: 12px 20px;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            transition: background-color 0.2s;
+        }
+
+        #track-list li:hover {
+            background-color: var(--hover-color);
+        }
+
+        #track-list li.active {
+            background-color: var(--active-color);
+            border-left: 4px solid var(--primary-color);
+            padding-left: 16px;
+        }
+
+        .track-title {
+            font-size: 15px;
+            font-weight: 500;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .track-channel {
+            font-size: 13px;
+            color: var(--text-secondary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .track-title.active-text {
+            color: var(--primary-color);
+        }
+    </style>
 </head>
 <body>
 
-    <div class="player-container">
-        <!-- Playlist Selector -->
-        <div class="controls-header">
-            <label for="playlist-select">Playlist:</label>
-            <select id="playlist-select">
-                <option value="Gym">Gym</option>
-                <option value="Driving">Driving</option>
-                <option value="Songs">Songs</option>
-            </select>
-        </div>
-
-        <!-- Now Playing Bar -->
-        <div class="now-playing">
-            <h2 id="current-title">Select a track</h2>
-            <p id="current-channel">-</p>
-            <audio id="audio-player" controls preload="metadata"></audio>
-        </div>
-
-        <!-- Track List -->
-        <div class="playlist-view">
-            <ul id="track-list"></ul>
-        </div>
+<div class="player-container">
+    <div class="header">
+        <select id="playlist-select">
+            <option value="Gym">Gym</option>
+            <option value="Driving">Driving</option>
+            <option value="Songs">Songs</option>
+        </select>
     </div>
 
-    <script src="app.js"></script>
+    <div class="now-playing">
+        <img id="album-art-image" src="" alt="Album Art">
+        <h2 id="current-title">Select a track</h2>
+        <p id="current-channel">--</p>
+        <audio id="audio-player" controls></audio>
+    </div>
+
+    <div class="playlist-container">
+        <ul id="track-list">
+            <li>Loading...</li>
+        </ul>
+    </div>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+    const playlistSelect = document.getElementById("playlist-select");
+    const trackList = document.getElementById("track-list");
+    const audioPlayer = document.getElementById("audio-player");
+    const currentTitle = document.getElementById("current-title");
+    const currentChannel = document.getElementById("current-channel");
+    const albumArt = document.getElementById("album-art-image");
+
+    let currentPlaylistData = [];
+    let currentIndex = -1;
+
+    async function loadPlaylist(folderName) {
+        trackList.innerHTML = "<li>Loading...</li>";
+        
+        const targetUrl = `./${folderName}/_Playlist_Database.json`;
+
+        try {
+            const response = await fetch(targetUrl);
+            if (!response.ok) {
+                throw new Error(`HTTP Error ${response.status}: ${response.statusText}`);
+            }
+
+            currentPlaylistData = await response.json();
+            renderTracks();
+        } catch (error) {
+            console.error(`[DEBUG] Caught Exception:`, error);
+            trackList.innerHTML = `<li style="color: #ff5555; padding: 20px;">Failed to load playlist database. Ensure JSON exists in the folder.</li>`;
+        }
+    }
+
+    function renderTracks() {
+        trackList.innerHTML = "";
+        currentPlaylistData.forEach((track, index) => {
+            const li = document.createElement("li");
+            li.innerHTML = `
+                <span class="track-title">${index + 1}. ${escapeHtml(track.title)}</span>
+                <span class="track-channel">${escapeHtml(track.channel)}</span>
+            `;
+            li.addEventListener("click", () => playTrack(index));
+            trackList.appendChild(li);
+        });
+    }
+
+    function playTrack(index) {
+        if (index < 0 || index >= currentPlaylistData.length) return;
+        
+        currentIndex = index;
+        const track = currentPlaylistData[index];
+
+        // Update UI Text
+        currentTitle.textContent = track.title;
+        currentChannel.textContent = track.channel;
+
+        // Highlight active track in list
+        const items = trackList.querySelectorAll("li");
+        items.forEach((item, idx) => {
+            const titleSpan = item.querySelector('.track-title');
+            if (idx === index) {
+                item.classList.add("active");
+                titleSpan.classList.add("active-text");
+                item.scrollIntoView({ behavior: "smooth", block: "nearest" });
+            } else {
+                item.classList.remove("active");
+                titleSpan.classList.remove("active-text");
+            }
+        });
+
+        // 1. Route the .webm audio file directly to the audio element
+        const audioPathParts = track.file_path.split('/');
+        const safeAudioPath = audioPathParts.map(part => encodeURIComponent(part)).join('/');
+        
+        // Because modern browsers natively support WebM via standard src mapping, 
+        // the previous blob fetch workaround has been removed for efficiency.
+        audioPlayer.src = `./${safeAudioPath}`;
+        
+        audioPlayer.play().catch(e => {
+            console.error(`[DEBUG] Playback failed:`, e);
+        });
+
+        // 2. Route the extracted thumbnail to the image element
+        if (track.thumbnail_path) {
+            const thumbParts = track.thumbnail_path.split('/');
+            const safeThumbPath = thumbParts.map(part => encodeURIComponent(part)).join('/');
+            albumArt.src = `./${safeThumbPath}`;
+            albumArt.style.display = 'block';
+        } else {
+            albumArt.style.display = 'none';
+        }
+    }
+
+    // Hide album art if the image 404s
+    albumArt.addEventListener("error", () => {
+        albumArt.style.display = 'none';
+    });
+
+    audioPlayer.addEventListener("error", (e) => {
+        console.error(`[DEBUG] Audio loading error:`, audioPlayer.error);
+        currentTitle.textContent = "Error loading audio file";
+    });
+
+    // Auto-advance to next track on end
+    audioPlayer.addEventListener("ended", () => {
+        if (currentIndex + 1 < currentPlaylistData.length) {
+            playTrack(currentIndex + 1);
+        }
+    });
+
+    playlistSelect.addEventListener("change", (e) => {
+        loadPlaylist(e.target.value);
+    });
+
+    function escapeHtml(str) {
+        if (!str) return "Unknown";
+        return str.replace(/[&<>"']/g, (m) => ({
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#039;'
+        })[m]);
+    }
+
+    // Initial load
+    loadPlaylist(playlistSelect.value);
+});
+</script>
+
 </body>
 </html>
