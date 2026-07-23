@@ -52,7 +52,7 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-    function playTrack(index) {
+    async function playTrack(index) {
         if (index < 0 || index >= currentPlaylistData.length) return;
         
         currentIndex = index;
@@ -73,16 +73,32 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         });
 
-        // Strictly encode file paths (handles #, &, +, etc. safely)
+        // Strictly encode file paths
         const pathParts = track.file_path.split('/');
         const safePath = pathParts.map(part => encodeURIComponent(part)).join('/');
         
-        // Load & Play with explicit relative pathing
-        audioPlayer.src = `./${safePath}`;
-        
-        audioPlayer.play().catch(e => {
-            console.error(`[DEBUG] Playback failed:`, e);
-        });
+        try {
+            // 1. Fetch the raw data from GitHub Pages
+            const response = await fetch(`./${safePath}`);
+            if (!response.ok) throw new Error(`HTTP Error ${response.status}`);
+            
+            const rawBlob = await response.blob();
+            
+            // 2. Force the correct MIME type, overriding the server's generic data header
+            const audioBlob = new Blob([rawBlob], { type: 'audio/webm' }); 
+            
+            // 3. Create a local URL for the audio element
+            const objectUrl = URL.createObjectURL(audioBlob);
+            audioPlayer.src = objectUrl;
+            
+            audioPlayer.play().catch(e => {
+                console.error(`[DEBUG] Playback failed:`, e);
+            });
+            
+        } catch (error) {
+            console.error(`[DEBUG] Audio fetch error:`, error);
+            currentTitle.textContent = "Error loading audio file (Check F12 Console)";
+        }
     }
 
     // Add explicit error catching for the audio element
