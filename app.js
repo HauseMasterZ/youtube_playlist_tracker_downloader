@@ -85,7 +85,7 @@ document.addEventListener("DOMContentLoaded", () => {
             const rawBlob = await response.blob();
             
             // 2. Force the correct MIME type, overriding the server's generic data header
-            const audioBlob = new Blob([rawBlob], { type: 'audio/webm' }); 
+            const audioBlob = new Blob([rawBlob], { type: 'audio/ogg; codecs=opus' });
             
             // 3. Create a local URL for the audio element
             const objectUrl = URL.createObjectURL(audioBlob);
