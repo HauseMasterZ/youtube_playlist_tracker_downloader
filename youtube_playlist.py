@@ -16,7 +16,6 @@ import traceback
 from googleapiclient.discovery import build
 
 def execute_with_retry(api_request, max_retries=5):
-    """Executes a Google API request with a built-in retry loop for transient SSL/Network errors."""
     for attempt in range(max_retries):
         try:
             return api_request.execute()
@@ -42,7 +41,6 @@ playlist_ids = {
 youtube = build('youtube', 'v3', developerKey=youtube_api_key)
 current_time = datetime.datetime.now()
 
-# Globals
 working_proxies_cache = []
 raw_proxy_pool = []
 
@@ -113,63 +111,13 @@ def refresh_proxies():
     tcp_alive_proxies = [r for r in results if r is not None]
     raw_proxy_pool = get_youtube_verified_proxies(tcp_alive_proxies)
 
-def extract_and_strip_metadata(file_path, meta_dict):
-    """
-    Probes an existing .opus file for embedded metadata. If found, rescues 
-    the data into the meta_dict and strips the file to prevent browser crashes.
-    """
-    if not os.path.exists(file_path):
-        return meta_dict
-
-    # Added -show_streams to expose tags buried inside the audio stream block
-    probe_cmd = ["ffprobe", "-v", "quiet", "-print_format", "json", "-show_format", "-show_streams", file_path]
-    try:
-        result = subprocess.run(probe_cmd, capture_output=True, text=True)
-        data = json.loads(result.stdout)
-        
-        # Consolidate tags from both the container format and the audio stream
-        tags = data.get("format", {}).get("tags", {})
-        for stream in data.get("streams", []):
-            tags.update(stream.get("tags", {}))
-            
-    except FileNotFoundError:
-        print(f"    -> [DEBUG] ERROR: ffprobe is missing. You must install FFmpeg on your GitHub Actions runner.")
-        return meta_dict
-    except Exception as e:
-        print(f"    -> [DEBUG] ERROR parsing metadata for {os.path.basename(file_path)}: {e}")
-        return meta_dict
-        
-    # Expanded the detection list to cover all variants of yt-dlp tag names
-    target_keys = ['description', 'title', 'artist', 'date', 'purl', 'comment', 'synopsis']
-    
-    if any(k.lower() in target_keys for k in tags.keys()):
-        print(f"    -> Extracting and stripping legacy metadata: {os.path.basename(file_path)}")
-        
-        meta_dict["description"] = meta_dict.get("description") or tags.get("DESCRIPTION") or tags.get("description", "")
-        meta_dict["title"] = meta_dict.get("title") or tags.get("TITLE") or tags.get("title", "")
-        meta_dict["channel"] = meta_dict.get("channel") or tags.get("ARTIST") or tags.get("artist", "")
-        meta_dict["upload_date"] = meta_dict.get("upload_date") or tags.get("DATE") or tags.get("date", "")
-        
-        temp_path = file_path + ".tmp.opus"
-        strip_cmd = ["ffmpeg", "-y", "-i", file_path, "-map_metadata", "-1", "-c:a", "copy", temp_path]
-        try:
-            subprocess.run(strip_cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            os.replace(temp_path, file_path)
-        except subprocess.CalledProcessError as e:
-            print(f"    -> [DEBUG] ERROR: Failed to strip metadata using ffmpeg: {e}")
-            if os.path.exists(temp_path):
-                os.remove(temp_path)
-    
-    return meta_dict
-
 def download_audio_ytdlp(vid_id, output_path, folder, proxy):
     base_out = output_path.rsplit('.', 1)[0]
     temp_out = f"{base_out}.%(ext)s"
     
     cmd = [
         sys.executable, "-m", "yt_dlp",
-        "-f", "bestaudio/best",
-        "-x", "--audio-format", "opus",
+        "-f", "bestaudio[ext=webm]/bestaudio",
         "--extractor-args", "youtube:player_client=ios,android",
         "--concurrent-fragments", "5",    
         "--socket-timeout", "15",         
@@ -348,7 +296,7 @@ for playlist_id, playlist_name in playlist_ids.items():
                 if not safe_title: safe_title = vid_id
                 if not safe_channel: safe_channel = "Unknown"
                 f.write(f"#EXTINF:-1,{meta['title']} - {meta['channel']}\n")
-                f.write(f"{safe_title} - {safe_channel}.opus\n")
+                f.write(f"{safe_title} - {safe_channel}.webm\n")
 
         json_path = f"{folder}/_Playlist_Database.json"
         json_data = []
@@ -359,12 +307,8 @@ for playlist_id, playlist_name in playlist_ids.items():
             if not safe_channel: safe_channel = "Unknown"
             
             detailed_name = f"{safe_title} - {safe_channel}"
-            file_path = f"{folder}/{detailed_name}.opus"
+            file_path = f"{folder}/{detailed_name}.webm"
 
-            # 1. Intercept the file to check for and strip legacy metadata
-            meta = extract_and_strip_metadata(file_path, meta)
-            
-            # 2. Write the expanded metadata block exclusively to the JSON Database
             json_data.append({
                 "id": vid_id,
                 "title": meta.get('title', 'Unknown Title'),
@@ -389,7 +333,7 @@ for playlist_id, playlist_name in playlist_ids.items():
             if not safe_channel: safe_channel = "Unknown"
             
             detailed_name = f"{safe_title} - {safe_channel}"
-            output_path = f"{folder}/{detailed_name}.opus"
+            output_path = f"{folder}/{detailed_name}.webm"
             
             if not os.path.exists(output_path):
                 if vid_id in dead_videos:
@@ -399,7 +343,6 @@ for playlist_id, playlist_name in playlist_ids.items():
                 file_start_time = datetime.datetime.now()
                 skip_hunting = False
                 
-                # Check cache first
                 for cached_proxy in list(working_proxies_cache):
                     print(f"    -> Trying known good cached proxy: {cached_proxy}")
                     res = download_audio_ytdlp(vid_id, output_path, folder, proxy=cached_proxy)
@@ -428,7 +371,6 @@ for playlist_id, playlist_name in playlist_ids.items():
                 if skip_hunting:
                     continue
                 
-                # Proxy Hunting
                 unavailable_count = 0
                 success = False
                 for attempt in range(30):
