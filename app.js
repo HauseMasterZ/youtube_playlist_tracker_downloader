@@ -11,7 +11,7 @@ document.addEventListener("DOMContentLoaded", () => {
     async function loadPlaylist(folderName) {
         trackList.innerHTML = "<li>Loading...</li>";
         try {
-            const response = await fetch(`${folderName}/_Playlist_Database.json`);
+            const response = await fetch(`./${folderName}/_Playlist_Database.json`);
             if (!response.ok) throw new Error("JSON not found");
             currentPlaylistData = await response.json();
             renderTracks();
