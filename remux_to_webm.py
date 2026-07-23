@@ -28,7 +28,9 @@ for folder in folders:
             
             try:
                 subprocess.run(thumb_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                subprocess.run(webm_cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+                
+                # ADDED: errors="replace" forces Python to ignore invalid Unicode bytes in the FFmpeg log
+                subprocess.run(webm_cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True, errors="replace")
                 
                 os.remove(opus_path)
                 print(f"    -> Converted & Extracted Art: {base_name}")
