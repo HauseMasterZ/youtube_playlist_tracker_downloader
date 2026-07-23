@@ -75,7 +75,7 @@
             object-fit: cover;
             margin-bottom: 20px;
             box-shadow: 0 4px 12px rgba(0,0,0,0.4);
-            display: none; /* Hidden until loaded */
+            display: none;
             background-color: var(--hover-color);
         }
 
@@ -92,7 +92,7 @@
         #current-channel {
             font-size: 14px;
             color: var(--text-secondary);
-            margin: 0 0 20px 0;
+            margin: 0 0 12px 0;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
@@ -100,17 +100,33 @@
         }
 
         audio {
-            width: 100%;
-            outline: none;
+            display: none;
         }
 
-        /* Custom Audio Player Styling for Webkit */
-        audio::-webkit-media-controls-panel {
-            background-color: var(--hover-color);
+        .custom-controls {
+            display: flex;
+            gap: 16px;
+            margin-top: 10px;
+            margin-bottom: 10px;
         }
-        audio::-webkit-media-controls-current-time-display,
-        audio::-webkit-media-controls-time-remaining-display {
+
+        .custom-controls button {
+            background-color: var(--hover-color);
             color: var(--text-primary);
+            border: none;
+            border-radius: 50%;
+            width: 48px;
+            height: 48px;
+            font-size: 20px;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transition: background-color 0.2s;
+        }
+
+        .custom-controls button:hover {
+            background-color: var(--active-color);
         }
 
         .playlist-container {
@@ -119,10 +135,10 @@
             border-top: 1px solid var(--hover-color);
         }
 
-        /* Scrollbar Styling */
         .playlist-container::-webkit-scrollbar {
             width: 8px;
         }
+        
         .playlist-container::-webkit-scrollbar-thumb {
             background-color: var(--active-color);
             border-radius: 4px;
@@ -191,7 +207,14 @@
         <img id="album-art-image" src="" alt="Album Art">
         <h2 id="current-title">Select a track</h2>
         <p id="current-channel">--</p>
-        <audio id="audio-player" controls></audio>
+        
+        <audio id="audio-player"></audio>
+        
+        <div class="custom-controls">
+            <button id="btn-prev">⏮</button>
+            <button id="btn-play-pause">▶</button>
+            <button id="btn-next">⏭</button>
+        </div>
     </div>
 
     <div class="playlist-container">
@@ -209,13 +232,16 @@ document.addEventListener("DOMContentLoaded", () => {
     const currentTitle = document.getElementById("current-title");
     const currentChannel = document.getElementById("current-channel");
     const albumArt = document.getElementById("album-art-image");
+    
+    const btnPlayPause = document.getElementById("btn-play-pause");
+    const btnPrev = document.getElementById("btn-prev");
+    const btnNext = document.getElementById("btn-next");
 
     let currentPlaylistData = [];
     let currentIndex = -1;
 
     async function loadPlaylist(folderName) {
         trackList.innerHTML = "<li>Loading...</li>";
-        
         const targetUrl = `./${folderName}/_Playlist_Database.json`;
 
         try {
@@ -251,11 +277,9 @@ document.addEventListener("DOMContentLoaded", () => {
         currentIndex = index;
         const track = currentPlaylistData[index];
 
-        // Update UI Text
         currentTitle.textContent = track.title;
         currentChannel.textContent = track.channel;
 
-        // Highlight active track in list
         const items = trackList.querySelectorAll("li");
         items.forEach((item, idx) => {
             const titleSpan = item.querySelector('.track-title');
@@ -269,30 +293,63 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         });
 
-        // 1. Route the .webm audio file directly to the audio element
         const audioPathParts = track.file_path.split('/');
         const safeAudioPath = audioPathParts.map(part => encodeURIComponent(part)).join('/');
-        
-        // Because modern browsers natively support WebM via standard src mapping, 
-        // the previous blob fetch workaround has been removed for efficiency.
         audioPlayer.src = `./${safeAudioPath}`;
         
-        audioPlayer.play().catch(e => {
+        audioPlayer.play().then(() => {
+            btnPlayPause.textContent = "⏸";
+        }).catch(e => {
             console.error(`[DEBUG] Playback failed:`, e);
         });
 
-        // 2. Route the extracted thumbnail to the image element
+        let absoluteThumbUrl = "";
         if (track.thumbnail_path) {
             const thumbParts = track.thumbnail_path.split('/');
             const safeThumbPath = thumbParts.map(part => encodeURIComponent(part)).join('/');
             albumArt.src = `./${safeThumbPath}`;
             albumArt.style.display = 'block';
+            absoluteThumbUrl = new URL(`./${safeThumbPath}`, window.location.href).href;
         } else {
             albumArt.style.display = 'none';
         }
+
+        if ('mediaSession' in navigator) {
+            const artworkArray = absoluteThumbUrl ? [{ src: absoluteThumbUrl, sizes: '512x512', type: 'image/jpeg' }] : [];
+            
+            navigator.mediaSession.metadata = new MediaMetadata({
+                title: track.title,
+                artist: track.channel,
+                album: playlistSelect.value,
+                artwork: artworkArray
+            });
+        }
     }
 
-    // Hide album art if the image 404s
+    btnPlayPause.addEventListener("click", () => {
+        if (!audioPlayer.src) return; 
+        
+        if (audioPlayer.paused) {
+            audioPlayer.play();
+            btnPlayPause.textContent = "⏸";
+        } else {
+            audioPlayer.pause();
+            btnPlayPause.textContent = "▶";
+        }
+    });
+
+    btnPrev.addEventListener("click", () => {
+        if (currentIndex > 0) {
+            playTrack(currentIndex - 1);
+        }
+    });
+
+    btnNext.addEventListener("click", () => {
+        if (currentIndex + 1 < currentPlaylistData.length) {
+            playTrack(currentIndex + 1);
+        }
+    });
+
     albumArt.addEventListener("error", () => {
         albumArt.style.display = 'none';
     });
@@ -300,12 +357,14 @@ document.addEventListener("DOMContentLoaded", () => {
     audioPlayer.addEventListener("error", (e) => {
         console.error(`[DEBUG] Audio loading error:`, audioPlayer.error);
         currentTitle.textContent = "Error loading audio file";
+        btnPlayPause.textContent = "▶";
     });
 
-    // Auto-advance to next track on end
     audioPlayer.addEventListener("ended", () => {
         if (currentIndex + 1 < currentPlaylistData.length) {
             playTrack(currentIndex + 1);
+        } else {
+            btnPlayPause.textContent = "▶";
         }
     });
 
@@ -324,7 +383,6 @@ document.addEventListener("DOMContentLoaded", () => {
         })[m]);
     }
 
-    // Initial load
     loadPlaylist(playlistSelect.value);
 });
 </script>
