@@ -121,34 +121,45 @@ def extract_and_strip_metadata(file_path, meta_dict):
     if not os.path.exists(file_path):
         return meta_dict
 
-    probe_cmd = ["ffprobe", "-v", "quiet", "-print_format", "json", "-show_format", file_path]
+    # Added -show_streams to expose tags buried inside the audio stream block
+    probe_cmd = ["ffprobe", "-v", "quiet", "-print_format", "json", "-show_format", "-show_streams", file_path]
     try:
         result = subprocess.run(probe_cmd, capture_output=True, text=True)
         data = json.loads(result.stdout)
-        tags = data.get("format", {}).get("tags", {})
-    except Exception:
-        tags = {}
         
-    # Detect if embedded metadata exists
-    if any(k.lower() in ['description', 'title', 'artist'] for k in tags.keys()):
+        # Consolidate tags from both the container format and the audio stream
+        tags = data.get("format", {}).get("tags", {})
+        for stream in data.get("streams", []):
+            tags.update(stream.get("tags", {}))
+            
+    except FileNotFoundError:
+        print(f"    -> [DEBUG] ERROR: ffprobe is missing. You must install FFmpeg on your GitHub Actions runner.")
+        return meta_dict
+    except Exception as e:
+        print(f"    -> [DEBUG] ERROR parsing metadata for {os.path.basename(file_path)}: {e}")
+        return meta_dict
+        
+    # Expanded the detection list to cover all variants of yt-dlp tag names
+    target_keys = ['description', 'title', 'artist', 'date', 'purl', 'comment', 'synopsis']
+    
+    if any(k.lower() in target_keys for k in tags.keys()):
         print(f"    -> Extracting and stripping legacy metadata: {os.path.basename(file_path)}")
         
-        # Rescue metadata into the dictionary if it is missing from the current YouTube fetch
         meta_dict["description"] = meta_dict.get("description") or tags.get("DESCRIPTION") or tags.get("description", "")
         meta_dict["title"] = meta_dict.get("title") or tags.get("TITLE") or tags.get("title", "")
         meta_dict["channel"] = meta_dict.get("channel") or tags.get("ARTIST") or tags.get("artist", "")
         meta_dict["upload_date"] = meta_dict.get("upload_date") or tags.get("DATE") or tags.get("date", "")
         
-        # Strip the metadata losslessly
         temp_path = file_path + ".tmp.opus"
         strip_cmd = ["ffmpeg", "-y", "-i", file_path, "-map_metadata", "-1", "-c:a", "copy", temp_path]
         try:
             subprocess.run(strip_cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             os.replace(temp_path, file_path)
-        except subprocess.CalledProcessError:
+        except subprocess.CalledProcessError as e:
+            print(f"    -> [DEBUG] ERROR: Failed to strip metadata using ffmpeg: {e}")
             if os.path.exists(temp_path):
                 os.remove(temp_path)
-                
+    
     return meta_dict
 
 def download_audio_ytdlp(vid_id, output_path, folder, proxy):
