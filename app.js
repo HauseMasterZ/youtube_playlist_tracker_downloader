@@ -10,16 +10,35 @@ document.addEventListener("DOMContentLoaded", () => {
 
     async function loadPlaylist(folderName) {
         trackList.innerHTML = "<li>Loading...</li>";
+        
+        // Define and log the exact path being requested
+        const targetUrl = `./${folderName}/_Playlist_Database.json`;
+        console.log(`[DEBUG] Target Fetch URL:`, targetUrl);
+        console.log(`[DEBUG] Absolute URL will resolve based on:`, window.location.href);
+
         try {
-            const response = await fetch(`./${folderName}/_Playlist_Database.json`);
-            if (!response.ok) throw new Error("JSON not found");
+            const response = await fetch(targetUrl);
+            
+            // Log the network response details
+            console.log(`[DEBUG] HTTP Status:`, response.status, response.statusText);
+            console.log(`[DEBUG] Resolved Final URL:`, response.url);
+
+            if (!response.ok) {
+                // If it fails (e.g., 404), attempt to read what the server actually returned
+                const errorText = await response.text();
+                console.log(`[DEBUG] Server Response Body:`, errorText);
+                throw new Error(`HTTP Error ${response.status}: ${response.statusText}`);
+            }
+
             currentPlaylistData = await response.json();
+            console.log(`[DEBUG] Successfully parsed JSON. Track count:`, currentPlaylistData.length);
+            
             renderTracks();
         } catch (error) {
+            console.error(`[DEBUG] Caught Exception:`, error);
             trackList.innerHTML = `<li style="color: #ff5555;">Failed to load playlist: ${error.message}</li>`;
         }
     }
-
     function renderTracks() {
         trackList.innerHTML = "";
         currentPlaylistData.forEach((track, index) => {
