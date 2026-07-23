@@ -16,6 +16,7 @@ import traceback
 from googleapiclient.discovery import build
 
 def execute_with_retry(api_request, max_retries=5):
+    """Executes a Google API request with a built-in retry loop for transient SSL/Network errors."""
     for attempt in range(max_retries):
         try:
             return api_request.execute()
@@ -41,6 +42,7 @@ playlist_ids = {
 youtube = build('youtube', 'v3', developerKey=youtube_api_key)
 current_time = datetime.datetime.now()
 
+# Globals
 working_proxies_cache = []
 raw_proxy_pool = []
 
@@ -118,6 +120,8 @@ def download_audio_ytdlp(vid_id, output_path, folder, proxy):
     cmd = [
         sys.executable, "-m", "yt_dlp",
         "-f", "bestaudio[ext=webm]/bestaudio",
+        "--write-thumbnail",
+        "--convert-thumbnails", "jpg",
         "--extractor-args", "youtube:player_client=ios,android",
         "--concurrent-fragments", "5",    
         "--socket-timeout", "15",         
@@ -134,6 +138,16 @@ def download_audio_ytdlp(vid_id, output_path, folder, proxy):
     try:
         result = subprocess.run(cmd, timeout=120, capture_output=True, text=True)
         if os.path.exists(output_path):
+            # Move the thumbnail to the subfolder
+            thumb_dir = os.path.join(folder, "thumbnails")
+            os.makedirs(thumb_dir, exist_ok=True)
+            
+            source_thumb = f"{base_out}.jpg"
+            dest_thumb = os.path.join(thumb_dir, os.path.basename(source_thumb))
+            
+            if os.path.exists(source_thumb):
+                os.replace(source_thumb, dest_thumb)
+                
             return "SUCCESS"
             
         error_output = result.stderr.strip()
@@ -308,6 +322,7 @@ for playlist_id, playlist_name in playlist_ids.items():
             
             detailed_name = f"{safe_title} - {safe_channel}"
             file_path = f"{folder}/{detailed_name}.webm"
+            thumb_path = f"{folder}/thumbnails/{detailed_name}.jpg"
 
             json_data.append({
                 "id": vid_id,
@@ -315,8 +330,9 @@ for playlist_id, playlist_name in playlist_ids.items():
                 "channel": meta.get('channel', 'Unknown Channel'),
                 "duration": meta.get('duration', 0),
                 "file_path": file_path,
+                "thumbnail_path": thumb_path,
                 "description": meta.get('description', ''),
-                "upload_date": meta.get('upload_date', meta.get('published', '')),
+                "upload_date": meta.get('published', ''),
                 "tags": meta.get('tags', [])
             })
             
