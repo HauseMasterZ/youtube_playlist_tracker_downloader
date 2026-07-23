@@ -13,7 +13,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          lfs: true
+          lfs: true 
 
       - name: Install FFmpeg
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
@@ -25,17 +25,3 @@ jobs:
 
       - name: Run conversion script
         run: python remux_to_webm.py
-
-      - name: Commit and push changes
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          
-          # Increase the HTTP buffer to 500MB to handle the massive media upload
-          git config --global http.postBuffer 524288000
-          
-          # Force HTTP/1.1 (HTTP/2 occasionally drops large continuous streams)
-          git config --global http.version HTTP/1.1
-          
-          git add -A
-          git diff --quiet && git diff --staged --quiet || (git commit -m "Losslessly remux .opus files to .webm container" && git push)
