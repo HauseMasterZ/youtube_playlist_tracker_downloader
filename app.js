@@ -58,7 +58,7 @@ document.addEventListener("DOMContentLoaded", () => {
         currentIndex = index;
         const track = currentPlaylistData[index];
 
-        // UpdateUI
+        // Update UI
         currentTitle.textContent = track.title;
         currentChannel.textContent = track.channel;
 
@@ -73,10 +73,23 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         });
 
-        // Load & Play
-        audioPlayer.src = encodeURI(track.file_path);
-        audioPlayer.play();
+        // Strictly encode file paths (handles #, &, +, etc. safely)
+        const pathParts = track.file_path.split('/');
+        const safePath = pathParts.map(part => encodeURIComponent(part)).join('/');
+        
+        // Load & Play with explicit relative pathing
+        audioPlayer.src = `./${safePath}`;
+        
+        audioPlayer.play().catch(e => {
+            console.error(`[DEBUG] Playback failed:`, e);
+        });
     }
+
+    // Add explicit error catching for the audio element
+    audioPlayer.addEventListener("error", (e) => {
+        console.error(`[DEBUG] Audio loading error:`, audioPlayer.error);
+        currentTitle.textContent = "Error loading audio file (Check F12 Console)";
+    });
 
     // Auto-advance to next track on end
     audioPlayer.addEventListener("ended", () => {
