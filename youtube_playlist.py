@@ -119,10 +119,10 @@ def download_audio_ytdlp(vid_id, output_path, folder, proxy):
     
     cmd = [
         sys.executable, "-m", "yt_dlp",
-        "-f", "bestaudio[ext=webm]/bestaudio",
+        "-f", "bestaudio[ext=webm]/bestaudio[ext=m4a]/bestaudio/b",
         "--write-thumbnail",
         "--convert-thumbnails", "jpg",
-        "--extractor-args", "youtube:player_client=ios,android",
+        "--extractor-args", "youtube:player_client=web,default",
         "--concurrent-fragments", "5",    
         "--socket-timeout", "15",         
         "--retries", "3",                 
