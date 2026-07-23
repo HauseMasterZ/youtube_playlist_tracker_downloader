@@ -12,6 +12,7 @@ import socket
 import time
 import json
 import traceback
+
 from googleapiclient.discovery import build
 
 def execute_with_retry(api_request, max_retries=5):
@@ -112,6 +113,44 @@ def refresh_proxies():
     tcp_alive_proxies = [r for r in results if r is not None]
     raw_proxy_pool = get_youtube_verified_proxies(tcp_alive_proxies)
 
+def extract_and_strip_metadata(file_path, meta_dict):
+    """
+    Probes an existing .opus file for embedded metadata. If found, rescues 
+    the data into the meta_dict and strips the file to prevent browser crashes.
+    """
+    if not os.path.exists(file_path):
+        return meta_dict
+
+    probe_cmd = ["ffprobe", "-v", "quiet", "-print_format", "json", "-show_format", file_path]
+    try:
+        result = subprocess.run(probe_cmd, capture_output=True, text=True)
+        data = json.loads(result.stdout)
+        tags = data.get("format", {}).get("tags", {})
+    except Exception:
+        tags = {}
+        
+    # Detect if embedded metadata exists
+    if any(k.lower() in ['description', 'title', 'artist'] for k in tags.keys()):
+        print(f"    -> Extracting and stripping legacy metadata: {os.path.basename(file_path)}")
+        
+        # Rescue metadata into the dictionary if it is missing from the current YouTube fetch
+        meta_dict["description"] = meta_dict.get("description") or tags.get("DESCRIPTION") or tags.get("description", "")
+        meta_dict["title"] = meta_dict.get("title") or tags.get("TITLE") or tags.get("title", "")
+        meta_dict["channel"] = meta_dict.get("channel") or tags.get("ARTIST") or tags.get("artist", "")
+        meta_dict["upload_date"] = meta_dict.get("upload_date") or tags.get("DATE") or tags.get("date", "")
+        
+        # Strip the metadata losslessly
+        temp_path = file_path + ".tmp.opus"
+        strip_cmd = ["ffmpeg", "-y", "-i", file_path, "-map_metadata", "-1", "-c:a", "copy", temp_path]
+        try:
+            subprocess.run(strip_cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            os.replace(temp_path, file_path)
+        except subprocess.CalledProcessError:
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+                
+    return meta_dict
+
 def download_audio_ytdlp(vid_id, output_path, folder, proxy):
     base_out = output_path.rsplit('.', 1)[0]
     temp_out = f"{base_out}.%(ext)s"
@@ -120,7 +159,6 @@ def download_audio_ytdlp(vid_id, output_path, folder, proxy):
         sys.executable, "-m", "yt_dlp",
         "-f", "bestaudio/best",
         "-x", "--audio-format", "opus",
-        "--embed-metadata", 
         "--extractor-args", "youtube:player_client=ios,android",
         "--concurrent-fragments", "5",    
         "--socket-timeout", "15",         
@@ -201,7 +239,6 @@ for playlist_id, playlist_name in playlist_ids.items():
         nextPageToken = None
 
         while True:
-            # FIX: Assigned strictly to `request` prior to execution.
             request = youtube.playlistItems().list(
                 part       = 'contentDetails',
                 playlistId = playlist_id,
@@ -220,7 +257,6 @@ for playlist_id, playlist_name in playlist_ids.items():
                 if vid_id not in track_map:
                     track_map[vid_id] = len(track_map) + 1
 
-            # FIX: Assigned strictly to `request` prior to execution.
             request = youtube.videos().list(
                 part       = "snippet, contentDetails",
                 id         = ','.join(vid_ids),
@@ -231,6 +267,7 @@ for playlist_id, playlist_name in playlist_ids.items():
             for item in vid_response['items']:
                 vid_id = item['id']
                 desc = item['snippet'].get('description', '')
+                tags = item['snippet'].get('tags', [])
                 current[vid_id] = {
                     "title"       : item['snippet']['title'],
                     "channel"     : item['snippet']['channelTitle'],
@@ -238,7 +275,8 @@ for playlist_id, playlist_name in playlist_ids.items():
                     "duration"    : item['contentDetails']['duration'],
                     "description" : desc,
                     "url"         : f"https://www.youtube.com/watch?v={vid_id}",
-                    "track_number": track_map[vid_id]
+                    "track_number": track_map[vid_id],
+                    "tags"        : tags
                 }
 
             nextPageToken = pl_response.get("nextPageToken")
@@ -300,7 +338,7 @@ for playlist_id, playlist_name in playlist_ids.items():
                 if not safe_channel: safe_channel = "Unknown"
                 f.write(f"#EXTINF:-1,{meta['title']} - {meta['channel']}\n")
                 f.write(f"{safe_title} - {safe_channel}.opus\n")
-        # NEW: Export JSON database for GitHub Pages frontend
+
         json_path = f"{folder}/_Playlist_Database.json"
         json_data = []
         for vid_id, meta in sorted_current:
@@ -309,12 +347,22 @@ for playlist_id, playlist_name in playlist_ids.items():
             if not safe_title: safe_title = vid_id
             if not safe_channel: safe_channel = "Unknown"
             
+            detailed_name = f"{safe_title} - {safe_channel}"
+            file_path = f"{folder}/{detailed_name}.opus"
+
+            # 1. Intercept the file to check for and strip legacy metadata
+            meta = extract_and_strip_metadata(file_path, meta)
+            
+            # 2. Write the expanded metadata block exclusively to the JSON Database
             json_data.append({
                 "id": vid_id,
-                "title": meta['title'],
-                "channel": meta['channel'],
-                "duration": meta['duration'],
-                "file_path": f"{folder}/{safe_title} - {safe_channel}.opus"
+                "title": meta.get('title', 'Unknown Title'),
+                "channel": meta.get('channel', 'Unknown Channel'),
+                "duration": meta.get('duration', 0),
+                "file_path": file_path,
+                "description": meta.get('description', ''),
+                "upload_date": meta.get('upload_date', meta.get('published', '')),
+                "tags": meta.get('tags', [])
             })
             
         with open(json_path, "w", encoding="utf-8") as f:
@@ -356,7 +404,6 @@ for playlist_id, playlist_name in playlist_ids.items():
                         dead_videos += f"{vid_id}\n"  
                         skip_hunting = True 
                         break
-                    # Insert this inside the `for cached_proxy in list(working_proxies_cache):` loop
                     elif res == "FATAL_AGE_RESTRICTED":
                         print(f"    -> FATAL: Video is age-restricted. Proxies cannot bypass logins. Skipping permanently.")
                         with open(dead_file, "a", encoding="utf-8") as f:
@@ -375,7 +422,6 @@ for playlist_id, playlist_name in playlist_ids.items():
                 success = False
                 for attempt in range(30):
                     
-                    # FIX: Cap proxy refresh loops to prevent hard lockups
                     proxy_refresh_attempts = 0
                     while not raw_proxy_pool and proxy_refresh_attempts < 3:
                         refresh_proxies()
@@ -403,7 +449,6 @@ for playlist_id, playlist_name in playlist_ids.items():
                         dead_videos += f"{vid_id}\n"  
                         break
 
-                    # Insert this inside the `for attempt in range(30):` loop, right below `if res == "FATAL_DELETED":`
                     if res == "FATAL_AGE_RESTRICTED":
                         print(f"    -> FATAL: Video is age-restricted. Proxies cannot bypass logins. Skipping permanently.")
                         with open(dead_file, "a", encoding="utf-8") as f:
@@ -426,12 +471,10 @@ for playlist_id, playlist_name in playlist_ids.items():
                     elapsed_secs = (datetime.datetime.now() - file_start_time).total_seconds()
                     print(f"    -> Time elapsed before failing: {elapsed_secs:.2f} seconds")
 
-        # FIX: Pushing aggregated changes once per playlist, not per track.
         print(f"    -> Syncing exact playlist order (.m3u8) and logs for {playlist_name}...")
         git_commit_and_push(f"Sync {playlist_name} tracker, logs, and new audio files")
 
     except Exception as e:
-        # FIX: Exposed the traceback so you aren't guessing where your code broke.
         print(f"Failed to process {playlist_name}: {e}")
         traceback.print_exc()
         continue
