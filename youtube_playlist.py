@@ -10,6 +10,7 @@ import concurrent.futures
 import requests
 import socket
 import time
+import json
 import traceback
 from googleapiclient.discovery import build
 
@@ -299,6 +300,25 @@ for playlist_id, playlist_name in playlist_ids.items():
                 if not safe_channel: safe_channel = "Unknown"
                 f.write(f"#EXTINF:-1,{meta['title']} - {meta['channel']}\n")
                 f.write(f"{safe_title} - {safe_channel}.opus\n")
+        # NEW: Export JSON database for GitHub Pages frontend
+        json_path = f"{folder}/_Playlist_Database.json"
+        json_data = []
+        for vid_id, meta in sorted_current:
+            safe_title = sanitize_filename(meta['title'])
+            safe_channel = sanitize_filename(meta['channel'])
+            if not safe_title: safe_title = vid_id
+            if not safe_channel: safe_channel = "Unknown"
+            
+            json_data.append({
+                "id": vid_id,
+                "title": meta['title'],
+                "channel": meta['channel'],
+                "duration": meta['duration'],
+                "file_path": f"{folder}/{safe_title} - {safe_channel}.opus"
+            })
+            
+        with open(json_path, "w", encoding="utf-8") as f:
+            json.dump(json_data, f, indent=4, ensure_ascii=False)
 
         with open(dead_file, "r", encoding="utf-8") as f:
             dead_videos = f.read()
