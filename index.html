@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Music Player</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <div class="player-container">
+        <!-- Playlist Selector -->
+        <div class="controls-header">
+            <label for="playlist-select">Playlist:</label>
+            <select id="playlist-select">
+                <option value="Gym">Gym</option>
+                <option value="Driving">Driving</option>
+                <option value="Songs">Songs</option>
+            </select>
+        </div>
+
+        <!-- Now Playing Bar -->
+        <div class="now-playing">
+            <h2 id="current-title">Select a track</h2>
+            <p id="current-channel">-</p>
+            <audio id="audio-player" controls preload="metadata"></audio>
+        </div>
+
+        <!-- Track List -->
+        <div class="playlist-view">
+            <ul id="track-list"></ul>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
