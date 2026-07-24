@@ -16,12 +16,12 @@ import threading
 import sys
 # Force unbuffered output so GitHub Actions logs stream in real-time
 sys.stdout.reconfigure(line_buffering=True)
-print("-> [Startup Trace] Starting imports...")
+print("-> [Startup Trace] Starting imports...", flush=True)
 
 from googleapiclient.discovery import build
-print("-> [Startup Trace] Imported googleapiclient")
+print("-> [Startup Trace] Imported googleapiclient", flush=True)
 import yt_dlp
-print("-> [Startup Trace] Imported yt_dlp")
+print("-> [Startup Trace] Imported yt_dlp", flush=True)
 
 def execute_with_retry(api_request, max_retries=5):
     """Executes a Google API request with a built-in retry loop for transient SSL/Network errors."""
@@ -46,9 +46,9 @@ PLAYLISTS = {
 }
 
 if youtube_api_key:
-    print("-> [Startup Trace] Building YouTube API client (this requires a network request)...")
+    print("-> [Startup Trace] Building YouTube API client (this requires a network request)...", flush=True)
     youtube = build('youtube', 'v3', developerKey=youtube_api_key)
-    print("-> [Startup Trace] YouTube API client built.")
+    print("-> [Startup Trace] YouTube API client built.", flush=True)
 
 current_time = datetime.datetime.now()
 
@@ -60,7 +60,7 @@ dead_file_lock = threading.Lock()
 print_lock = threading.Lock()
 
 # Fetch tracked files to avoid relying on os.path.exists for large files excluded by sparse-checkout
-print("-> [Startup Trace] Running 'git ls-files' to fetch tracked files...")
+print("-> [Startup Trace] Running 'git ls-files' to fetch tracked files...", flush=True)
 try:
     tracked_files_output = subprocess.check_output(
         ['git', '-c', 'core.quotePath=false', 'ls-files'],
@@ -69,7 +69,7 @@ try:
         errors='replace'
     )
     git_tracked_files = {line.strip('"') for line in tracked_files_output.splitlines()}
-    print(f"-> [Startup Trace] 'git ls-files' completed. Found {len(git_tracked_files)} tracked files.")
+    print(f"-> [Startup Trace] 'git ls-files' completed. Found {len(git_tracked_files)} tracked files.", flush=True)
 except Exception as e:
     print(f"WARNING: Could not fetch git tracked files: {e}")
     git_tracked_files = set()
@@ -242,7 +242,7 @@ def process_track(vid_id, meta, detailed_name, output_path, folder, playlist_nam
         elif res in ("FATAL_DELETED", "FATAL_AGE_RESTRICTED"):
             with dead_file_lock:
                 with open(dead_file, "a", encoding="utf-8") as f:
-                    f.write(f"{vid_id} - {detailed_name} - {meta['url']} ({res})\n")
+                    f.write(f"{datetime.datetime.now().strftime('%Y-%m-%d')} | {vid_id} | {detailed_name} | {meta['url']} | {res}\n")
             return "DEAD", vid_id
             
     success = False
@@ -275,7 +275,7 @@ def process_track(vid_id, meta, detailed_name, output_path, folder, playlist_nam
             if unavailable_count >= 4:
                 with dead_file_lock:
                     with open(dead_file, "a", encoding="utf-8") as f:
-                        f.write(f"{vid_id} - {detailed_name} - {meta['url']} (GEO_BLOCKED)\n")
+                        f.write(f"{datetime.datetime.now().strftime('%Y-%m-%d')} | {vid_id} | {detailed_name} | {meta['url']} | GEO_BLOCKED\n")
                 return "DEAD", vid_id
                 
     if not success and unavailable_count < 4:
@@ -366,6 +366,22 @@ def main():
                              "".join([f"{meta['track_number']}: {meta['title']}\n" for _, meta in sorted_current])
             atomic_write(titles_file, titles_content)
 
+            valid_dead_lines = []
+            dead_videos_set = set()
+            with open(dead_file, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line: continue
+                    match = re.match(r"^(\d{4}-\d{2}-\d{2}) \| ([^|]+) \|", line)
+                    if match:
+                        date_str, v_id = match.groups()
+                        date_obj = datetime.datetime.strptime(date_str, "%Y-%m-%d").date()
+                        if (current_time.date() - date_obj).days < 1:
+                            valid_dead_lines.append(line)
+                            dead_videos_set.add(v_id.strip())
+            
+            atomic_write(dead_file, [line + "\n" for line in valid_dead_lines])
+
             json_data = []
             m3u8_lines = ["#EXTM3U\n"]
             
@@ -383,14 +399,14 @@ def main():
                     "thumbnail_path": f"{folder}/thumbnails/{detailed_name}.jpg",
                     "description": meta.get('description', ''),
                     "upload_date": meta.get('published', ''),
-                    "tags": meta.get('tags', [])
+                    "tags": meta.get('tags', []),
+                    "is_dead": vid_id in dead_videos_set
                 })
 
             atomic_write(f"{folder}/_Playlist_Order.m3u8", m3u8_lines)
             atomic_write(f"{folder}/_Playlist_Database.json", json_data, is_json=True)
 
-            with open(dead_file, "r", encoding="utf-8") as f:
-                dead_videos = f.read()
+
 
             missing_tracks = []
             for vid_id, meta in sorted_current:
@@ -400,7 +416,7 @@ def main():
                 # Check if file exists locally OR is already tracked in git (but excluded by sparse checkout)
                 is_tracked = output_path.replace('\\', '/') in git_tracked_files
                 
-                if os.path.exists(output_path) or is_tracked or vid_id in dead_videos:
+                if os.path.exists(output_path) or is_tracked or vid_id in dead_videos_set:
                     continue
                 
                 missing_tracks.append((vid_id, meta, detailed_name, output_path))
