@@ -2,7 +2,9 @@ name: YouTube Playlist Tracker
 
 on:
   schedule:
-    - cron: '0 */3 * * *'
+    - cron: '30 23 * * *'    # Runs exactly at 5:00 AM IST
+    - cron: '30 4-17 * * *'  # Runs every hour on the hour from 10:00 AM to 11:00 PM IST
+    
   workflow_dispatch:
 
 jobs:
