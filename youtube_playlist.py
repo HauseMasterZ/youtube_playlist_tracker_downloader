@@ -168,7 +168,7 @@ def download_audio_ytdlp(vid_id, output_path, folder, proxy):
 
 def git_commit_and_push(title):
     try:
-        subprocess.run(['git', 'add', '-A'], check=True, stdout=subprocess.DEVNULL)
+        subprocess.run(['git', 'add', '--sparse', '-A'], check=True, stdout=subprocess.DEVNULL)
         status = subprocess.run(['git', 'status', '--porcelain'], capture_output=True, text=True)
         if not status.stdout.strip():
             print("    -> No changes to commit.")
