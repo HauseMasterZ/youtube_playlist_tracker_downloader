@@ -1456,7 +1456,7 @@
             "Karytoon",
             "In to it"
         ],
-        "is_dead": false
+        "is_dead": true
     },
     {
         "id": "PnhttGuX-q0",
@@ -4269,7 +4269,7 @@
             "Marvin Divine",
             "MATAFAKA"
         ],
-        "is_dead": false
+        "is_dead": true
     },
     {
         "id": "Z6pPLL5iUSE",
@@ -5003,7 +5003,7 @@
             "Frankie Storm",
             "Don't Stop The Music"
         ],
-        "is_dead": false
+        "is_dead": true
     },
     {
         "id": "MmpVAy35W0k",
@@ -5224,7 +5224,7 @@
             "Giorgi Matkava",
             "ჩუბინა"
         ],
-        "is_dead": false
+        "is_dead": true
     },
     {
         "id": "VNcWXXpmGcs",
@@ -5867,7 +5867,7 @@
             "INSTASAMKA",
             "Отключаю телефон (Slowed)"
         ],
-        "is_dead": false
+        "is_dead": true
     },
     {
         "id": "avwVpBv6QY4",
@@ -6443,7 +6443,7 @@
             "BEAT IT",
             "BEAT IT (SPED UP)"
         ],
-        "is_dead": false
+        "is_dead": true
     },
     {
         "id": "dxJaoNkpntA",
@@ -6927,7 +6927,7 @@
             "HazeRipper",
             "Watch Out"
         ],
-        "is_dead": false
+        "is_dead": true
     },
     {
         "id": "6Qm7pHtPNmc",
@@ -7444,7 +7444,7 @@
             "HazeRipper",
             "Top G"
         ],
-        "is_dead": false
+        "is_dead": true
     },
     {
         "id": "ft4P_BYf_uc",
@@ -7460,7 +7460,7 @@
             "Second Chance",
             "Dancin' For The Power"
         ],
-        "is_dead": false
+        "is_dead": true
     },
     {
         "id": "QczHr4PRPAE",
@@ -8600,7 +8600,7 @@
             "HazeRipper",
             "Destroyer"
         ],
-        "is_dead": false
+        "is_dead": true
     },
     {
         "id": "qdGZ_Oy_yQ0",
@@ -8615,7 +8615,7 @@
             "HazeRipper",
             "Fool"
         ],
-        "is_dead": false
+        "is_dead": true
     },
     {
         "id": "ewH-kpe4vJs",
@@ -8630,7 +8630,7 @@
             "HazeRipper",
             "Lane Switching"
         ],
-        "is_dead": false
+        "is_dead": true
     },
     {
         "id": "kGjPTJmedpE",
@@ -8672,7 +8672,7 @@
             "HazeRipper",
             "Ak 47"
         ],
-        "is_dead": false
+        "is_dead": true
     },
     {
         "id": "ILVWWiOmiA8",
@@ -8779,7 +8779,7 @@
             "HazeRipper",
             "Today We Hustle"
         ],
-        "is_dead": false
+        "is_dead": true
     },
     {
         "id": "B5Z79pzSDhI",
@@ -9133,7 +9133,7 @@
             "HazeRipper",
             "Glock Em"
         ],
-        "is_dead": false
+        "is_dead": true
     },
     {
         "id": "AUFAFysfO38",
@@ -9148,7 +9148,7 @@
             "HazeRipper",
             "On Da Grind"
         ],
-        "is_dead": false
+        "is_dead": true
     },
     {
         "id": "sdixhBISOes",
@@ -9163,7 +9163,7 @@
             "HazeRipper",
             "Dirty Sprite"
         ],
-        "is_dead": false
+        "is_dead": true
     },
     {
         "id": "XenYb-QrmM8",
@@ -9178,6 +9178,6 @@
             "HazeRipper",
             "Hunter"
         ],
-        "is_dead": false
+        "is_dead": true
     }
 ]
