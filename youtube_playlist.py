@@ -16,9 +16,12 @@ import threading
 import sys
 # Force unbuffered output so GitHub Actions logs stream in real-time
 sys.stdout.reconfigure(line_buffering=True)
+print("-> [Startup Trace] Starting imports...")
 
 from googleapiclient.discovery import build
+print("-> [Startup Trace] Imported googleapiclient")
 import yt_dlp
+print("-> [Startup Trace] Imported yt_dlp")
 
 def execute_with_retry(api_request, max_retries=5):
     """Executes a Google API request with a built-in retry loop for transient SSL/Network errors."""
@@ -43,7 +46,9 @@ PLAYLISTS = {
 }
 
 if youtube_api_key:
+    print("-> [Startup Trace] Building YouTube API client (this requires a network request)...")
     youtube = build('youtube', 'v3', developerKey=youtube_api_key)
+    print("-> [Startup Trace] YouTube API client built.")
 
 current_time = datetime.datetime.now()
 
@@ -55,6 +60,7 @@ dead_file_lock = threading.Lock()
 print_lock = threading.Lock()
 
 # Fetch tracked files to avoid relying on os.path.exists for large files excluded by sparse-checkout
+print("-> [Startup Trace] Running 'git ls-files' to fetch tracked files...")
 try:
     tracked_files_output = subprocess.check_output(
         ['git', '-c', 'core.quotePath=false', 'ls-files'],
@@ -63,6 +69,7 @@ try:
         errors='replace'
     )
     git_tracked_files = {line.strip('"') for line in tracked_files_output.splitlines()}
+    print(f"-> [Startup Trace] 'git ls-files' completed. Found {len(git_tracked_files)} tracked files.")
 except Exception as e:
     print(f"WARNING: Could not fetch git tracked files: {e}")
     git_tracked_files = set()
