@@ -161,10 +161,19 @@ def git_commit_and_push(title):
             return
             
         subprocess.run(['git', 'commit', '-m', title], check=True, stdout=subprocess.DEVNULL)
-        subprocess.run(['git', 'pull', '--rebase'], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        subprocess.run(['git', 'push'], check=True, stdout=subprocess.DEVNULL)
-        print("    -> Changes pushed to git.")
-    except subprocess.CalledProcessError as e:
+        
+        # Pull with rebase from origin main to resolve detached HEAD conflicts
+        pull_res = subprocess.run(['git', 'pull', '--rebase', 'origin', 'main'], capture_output=True, text=True)
+        if pull_res.returncode != 0:
+            print(f"    -> Git pull warning: {pull_res.stderr.strip()}")
+            
+        # Push explicitly to origin HEAD:main since actions/checkout defaults to detached HEAD
+        push_res = subprocess.run(['git', 'push', 'origin', 'HEAD:main'], capture_output=True, text=True)
+        if push_res.returncode != 0:
+            print(f"    -> Git push error: {push_res.stderr.strip()}")
+        else:
+            print("    -> Changes pushed to git.")
+    except Exception as e:
         print(f"    -> Git commit/push failed: {e}")
 
 def sanitize(name):
