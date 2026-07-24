@@ -8104,3 +8104,63 @@ Track 1: I Like It
 
 #-----------------------------------------------#
 
+Added on: 2026-07-24 14:11:31.115108
+
+Track 1: Naa Manasuki
+   Channel  : Karthik - Topic
+   Published: 2014-11-08T08:31:59Z
+   Duration : PT5M40S
+   URL      : https://www.youtube.com/watch?v=iMwSOjM11b0
+   Desc     : Provided to YouTube by YouTube CSV2DDEX  Naa Manasuki · Karthik · Gayatri  Aadavari Matalaku Ardhalu Veruley  ℗ 2014 Aditya Music (India) Pvt Ltd  Rel...
+
+Track 2: Idhedho Bagundhe
+   Channel  : Vijay Prakash - Topic
+   Published: 2015-06-23T15:40:04Z
+   Duration : PT4M27S
+   URL      : https://www.youtube.com/watch?v=_AICufHR9SM
+   Desc     : Provided to YouTube by YouTube CSV2DDEX  Idhedho Bagundhe · Vijay Prakash · Anitha  Mirchi  ℗ 2014 Aditya Music (India) Pvt Ltd  Released on: 2013-01-...
+
+Track 3: Gunde Aagi Pothaande
+   Channel  : Hemachandra Vedala - Topic
+   Published: 2015-09-15T14:26:30Z
+   Duration : PT3M10S
+   URL      : https://www.youtube.com/watch?v=VFSptMTXJI8
+   Desc     : Provided to YouTube by AdityaMusic  Gunde Aagi Pothaande · Hema Chandra · M.M.Manasi  Shivam  ℗ 2015 Aditya Music (India) Pvt Ltd  Released on: 2015-0...
+
+Track 4: Cinema Choopistha Mama
+   Channel  : M.M.Manasi - Topic
+   Published: 2025-01-28T09:32:26Z
+   Duration : PT4M30S
+   URL      : https://www.youtube.com/watch?v=kiCsar38OJo
+   Desc     : Provided to YouTube by Phonographic Digital Limited India  Cinema Choopistha Mama · M.M. Manasi · Malavika · Simha · Mm Monisha · Thaman S · Thaman S ...
+
+Track 5: Dethadi Dethadi
+   Channel  : Renjith - Topic
+   Published: 2014-11-09T02:53:24Z
+   Duration : PT4M9S
+   URL      : https://www.youtube.com/watch?v=EaYsnI1p5f8
+   Desc     : Provided to YouTube by YouTube CSV2DDEX  Dethadi Dethadi · Ranjith · Divya  Dookudu  ℗ 2014 Aditya Music (India) Pvt Ltd  Released on: 2011-08-18  Aut...
+
+Track 6: Yemaindho Teliyadu Naaku
+   Channel  : Karthik - Topic
+   Published: 2019-03-30T05:33:57Z
+   Duration : PT3M53S
+   URL      : https://www.youtube.com/watch?v=VTQ1A2Pxuao
+   Desc     : Provided to YouTube by AdityaMusic  Yemaindho Teliyadu Naaku · Karthik · Deepika V  MCA  ℗ 2017 Aditya Music (India) Pvt Ltd  Released on: 2017-12-10 ...
+
+Track 7: Dillaku Dillaku
+   Channel  : Tippu - Topic
+   Published: 2015-06-23T16:45:21Z
+   Duration : PT4M36S
+   URL      : https://www.youtube.com/watch?v=kYD48ANXfjc
+   Desc     : Provided to YouTube by YouTube CSV2DDEX  Dillaku Dillaku · Tippu · Geetha Madhuri  Racha  ℗ 2014 Aditya Music (India) Pvt Ltd  Released on: 2012-03-11...
+
+Track 8: Kirraaku
+   Channel  : Narendra - Topic
+   Published: 2019-06-26T12:08:04Z
+   Duration : PT3M56S
+   URL      : https://www.youtube.com/watch?v=qnxbPg60w2U
+   Desc     : Provided to YouTube by AdityaMusic  Kirraaku · Narendra · David Simon  Attarrintiki Daaredi  ℗ 2013 Aditya Music (India) Pvt Ltd  Released on: 2013-07...
+
+#-----------------------------------------------#
+
