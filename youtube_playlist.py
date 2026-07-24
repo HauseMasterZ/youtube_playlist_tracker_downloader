@@ -5,7 +5,6 @@ import re
 import sys
 import subprocess
 import random
-import urllib.request
 import concurrent.futures
 import requests
 import socket
@@ -14,6 +13,7 @@ import json
 import traceback
 
 from googleapiclient.discovery import build
+import yt_dlp
 
 def execute_with_retry(api_request, max_retries=5):
     """Executes a Google API request with a built-in retry loop for transient SSL/Network errors."""
@@ -26,424 +26,327 @@ def execute_with_retry(api_request, max_retries=5):
             print(f"        -> Google API connection dropped ({e}). Retrying in 5 seconds... ({attempt + 1}/{max_retries})")
             time.sleep(5)
 
-print("Installing required multi-threading and proxy libraries...")
-subprocess.check_call([sys.executable, "-m", "pip", "install", "-U", "yt-dlp", "requests", "PySocks"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-
 youtube_api_key = os.environ.get("YOUTUBE_API_KEY")
 if not youtube_api_key:
-    raise ValueError("YOUTUBE_API_KEY environment variable not set")
+    # Set a dummy one for testing if not available, or throw
+    print("WARNING: YOUTUBE_API_KEY environment variable not set. It must be provided in production.")
 
-playlist_ids = {
+PLAYLISTS = {
     "PLK5tc6FSo174pECpHWftUYDcw5KFk4HLs": "Gym",
     "PLK5tc6FSo175xc8zNBMrUZJIY9Q_K9I4w": "Driving",
     "PLK5tc6FSo177DVG_k_Tx57Ztvh0B-5Drd": "Songs"
 }
 
-youtube = build('youtube', 'v3', developerKey=youtube_api_key)
+if youtube_api_key:
+    youtube = build('youtube', 'v3', developerKey=youtube_api_key)
+
 current_time = datetime.datetime.now()
 
-# Globals
+# Globals for proxy cache
 working_proxies_cache = []
 raw_proxy_pool = []
 
-def sanitize_filename(name):
-    return re.sub(r'[\\/*?:"<>|]', "", name)
+# Fetch tracked files to avoid relying on os.path.exists for large files excluded by sparse-checkout
+try:
+    tracked_files_output = subprocess.check_output(['git', 'ls-files']).decode('utf-8')
+    git_tracked_files = set(tracked_files_output.splitlines())
+except Exception:
+    git_tracked_files = set()
 
-def is_youtube_ready(proxy):
+def check_proxy(proxy_url):
+    """Checks a proxy rapidly. If TCP connects, verify against YouTube."""
     try:
-        res = requests.get("https://www.youtube.com/generate_204", proxies={"http": proxy, "https": proxy}, timeout=3)
-        return proxy if res.status_code == 204 else None
+        ip, port = proxy_url.split("://")[1].split(":")
+        with socket.create_connection((ip, int(port)), timeout=2):
+            res = requests.get("https://www.youtube.com/generate_204", 
+                               proxies={"http": proxy_url, "https": proxy_url}, timeout=3)
+            if res.status_code == 204:
+                return proxy_url
     except:
-        return None
-
-def get_youtube_verified_proxies(raw_proxies, max_workers=200):
-    print(f"    -> Concurrently verifying {len(raw_proxies)} proxies strictly against YouTube servers...")
-    verified_pool = []
-    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-        results = executor.map(is_youtube_ready, raw_proxies)
-        for res in results:
-            if res: verified_pool.append(res)
-    print(f"    -> Retained {len(verified_pool)} strictly YouTube-ready proxies.")
-    return verified_pool
+        pass
+    return None
 
 def refresh_proxies():
+    """Fetches and verifies new proxy lists concurrently."""
     global raw_proxy_pool
     print("    -> Fetching and rapidly verifying fresh proxy lists...")
-    raw_proxy_pool = []
+    
+    urls = [
+        "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/socks5.txt",
+        "https://raw.githubusercontent.com/monosans/proxy-list/main/proxies/socks5.txt",
+        "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/socks4.txt",
+        "https://raw.githubusercontent.com/monosans/proxy-list/main/proxies/socks4.txt",
+        "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt",
+        "https://raw.githubusercontent.com/monosans/proxy-list/main/proxies/http.txt"
+    ]
+    
     temp_pool = []
-    
-    proxy_sources = {
-        "socks5": [
-            "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/socks5.txt",
-            "https://raw.githubusercontent.com/monosans/proxy-list/main/proxies/socks5.txt"
-        ],
-        "socks4": [
-            "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/socks4.txt",
-            "https://raw.githubusercontent.com/monosans/proxy-list/main/proxies/socks4.txt"
-        ],
-        "http": [
-            "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt",
-            "https://raw.githubusercontent.com/monosans/proxy-list/main/proxies/http.txt"
-        ]
-    }
-    
-    for protocol, urls in proxy_sources.items():
-        for url in urls:
-            try:
-                req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-                with urllib.request.urlopen(req, timeout=5) as response:
-                    for line in response.read().decode('utf-8').splitlines():
-                        if line.strip(): temp_pool.append(f"{protocol}://{line.strip()}")
-            except: pass
+    for url in urls:
+        try:
+            protocol = "socks5" if "socks5" in url else "socks4" if "socks4" in url else "http"
+            resp = requests.get(url, timeout=5)
+            for line in resp.text.splitlines():
+                if line.strip():
+                    temp_pool.append(f"{protocol}://{line.strip()}")
+        except:
+            pass
 
     random.shuffle(temp_pool)
+    print("    -> Filtering proxies concurrently...")
     
-    def check_proxy(p):
-        try:
-            ip, port = p.split("://")[1].split(":")
-            with socket.create_connection((ip, int(port)), timeout=2):
-                return p
-        except: 
-            return None
-
-    print("    -> Filtering out offline proxies via TCP ping (this takes ~3 seconds)...")
+    verified_pool = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=200) as executor:
-        results = list(executor.map(check_proxy, temp_pool[:1000]))
-        
-    tcp_alive_proxies = [r for r in results if r is not None]
-    raw_proxy_pool = get_youtube_verified_proxies(tcp_alive_proxies)
+        for p in executor.map(check_proxy, temp_pool[:1000]):
+            if p: verified_pool.append(p)
+            
+    raw_proxy_pool = verified_pool
+    print(f"    -> Retained {len(raw_proxy_pool)} YouTube-ready proxies.")
 
 def download_audio_ytdlp(vid_id, output_path, folder, proxy):
+    """Uses yt-dlp Python library for faster, isolated downloading."""
     base_out = output_path.rsplit('.', 1)[0]
     temp_out = f"{base_out}.%(ext)s"
     
-    cmd = [
-        sys.executable, "-m", "yt_dlp",
-        "-f", "bestaudio[ext=webm]/bestaudio",
-        "--write-thumbnail",
-        "--convert-thumbnails", "jpg",
-        "--extractor-args", "youtube:player_client=web,default",
-        "--concurrent-fragments", "5",    
-        "--socket-timeout", "15",         
-        "--retries", "3",                 
-        "--fragment-retries", "3",        
-        "--no-check-certificates", 
-        "--force-ipv4",             
-        "--legacy-server-connect",  
-        "--proxy", proxy,
-        "-o", temp_out,
-        f"https://www.youtube.com/watch?v={vid_id}"
-    ]
-        
+    ydl_opts = {
+        'format': 'bestaudio[ext=webm]/bestaudio',
+        'writethumbnail': True,
+        'outtmpl': temp_out,
+        'proxy': proxy,
+        'extractor_args': {'youtube': {'player_client': ['web', 'default']}},
+        'concurrent_fragment_downloads': 5,
+        'socket_timeout': 15,
+        'retries': 3,
+        'fragment_retries': 3,
+        'nocheckcertificate': True,
+        'source_address': '0.0.0.0', # force ipv4
+        'legacy_server_connect': True,
+        'quiet': True,
+        'no_warnings': True,
+        'postprocessors': [{'key': 'FFmpegThumbnailsConvertor', 'format': 'jpg'}],
+    }
+
     try:
-        result = subprocess.run(cmd, timeout=120, capture_output=True, text=True)
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ydl.download([f"https://www.youtube.com/watch?v={vid_id}"])
+            
         if os.path.exists(output_path):
-            # Move the thumbnail to the subfolder
             thumb_dir = os.path.join(folder, "thumbnails")
             os.makedirs(thumb_dir, exist_ok=True)
-            
             source_thumb = f"{base_out}.jpg"
-            dest_thumb = os.path.join(thumb_dir, os.path.basename(source_thumb))
-            
             if os.path.exists(source_thumb):
-                os.replace(source_thumb, dest_thumb)
-                
+                os.replace(source_thumb, os.path.join(thumb_dir, os.path.basename(source_thumb)))
             return "SUCCESS"
-            
-        error_output = result.stderr.strip()
-        if not error_output: 
-            error_output = result.stdout.strip()
-            
-        fatal_errors = ["Private video", "removed by the uploader", "account has been terminated", "copyright claim"]
-        if any(err in error_output for err in fatal_errors):
+        return "FAILED"
+    except yt_dlp.utils.DownloadError as e:
+        error_msg = str(e)
+        if any(err in error_msg for err in ["Private video", "removed by the uploader", "account has been terminated", "copyright claim"]):
             return "FATAL_DELETED"
-
-        age_errors = ["Sign in to confirm your age", "age-restricted"]
-        if any(err in error_output for err in age_errors):
+        if any(err in error_msg for err in ["Sign in to confirm your age", "age-restricted"]):
             return "FATAL_AGE_RESTRICTED"
-            
-        geo_errors = ["This video is not available", "Video unavailable", "not available in your country"]
-        if any(err in error_output for err in geo_errors):
+        if any(err in error_msg for err in ["This video is not available", "Video unavailable", "not available in your country"]):
             return "GEO_BLOCKED"
             
-        err_lines = [line for line in error_output.splitlines() if "ERROR:" in line]
-        if err_lines:
-            final_err = err_lines[-1].split("; please report this issue")[0]
-            print(f"        -> yt-dlp Raw Error: {final_err}")
-        else:
-            print("        -> yt-dlp Error: Unknown/Empty output (Connection dropped).")
-        
-        return "FAILED"
-        
-    except subprocess.TimeoutExpired:
-        print("        -> yt-dlp Error: Process timed out (Proxy took longer than 2 minutes).")
+        print(f"        -> yt-dlp Error: {error_msg.splitlines()[0]}")
         return "FAILED"
     except Exception as e:
-        print(f"        -> yt-dlp Error: {str(e)}")
+        print(f"        -> yt-dlp Exception: {str(e)}")
         return "FAILED"
 
 def git_commit_and_push(title):
     try:
         subprocess.run(['git', 'add', '-A'], check=True, stdout=subprocess.DEVNULL)
-        subprocess.run(['git', 'commit', '-m', f"{title}"], check=True, stdout=subprocess.DEVNULL)
+        status = subprocess.run(['git', 'status', '--porcelain'], capture_output=True, text=True)
+        if not status.stdout.strip():
+            print("    -> No changes to commit.")
+            return
+            
+        subprocess.run(['git', 'commit', '-m', title], check=True, stdout=subprocess.DEVNULL)
         subprocess.run(['git', 'pull', '--rebase'], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         subprocess.run(['git', 'push'], check=True, stdout=subprocess.DEVNULL)
-    except subprocess.CalledProcessError:
-        pass
+        print("    -> Changes pushed to git.")
+    except subprocess.CalledProcessError as e:
+        print(f"    -> Git commit/push failed: {e}")
 
-for playlist_id, playlist_name in playlist_ids.items():
-    try:
-        print(f"\nProcessing Playlist: {playlist_name}")
-        folder = playlist_name
-        os.makedirs(folder, exist_ok=True)
+def sanitize(name):
+    return re.sub(r'[\\/*?:"<>|]', "", name) or "Unknown"
 
-        data_file    = f"{folder}/Video_Playlist_Data.p"
-        titles_file  = f"{folder}/Video_Titles.txt"
-        added_file   = f"{folder}/Video_Titles_Added.txt"
-        removed_file = f"{folder}/Video_Titles_Removed.txt"
-        dead_file    = f"{folder}/dead_videos.txt"
+def main():
+    if not youtube_api_key: return
+    
+    for playlist_id, playlist_name in PLAYLISTS.items():
+        try:
+            print(f"\nProcessing Playlist: {playlist_name}")
+            folder = playlist_name
+            os.makedirs(folder, exist_ok=True)
 
-        for file_path in [added_file, removed_file, dead_file]:
-            if not os.path.exists(file_path):
-                open(file_path, 'w').close()
+            data_file    = f"{folder}/Video_Playlist_Data.p"
+            titles_file  = f"{folder}/Video_Titles.txt"
+            added_file   = f"{folder}/Video_Titles_Added.txt"
+            removed_file = f"{folder}/Video_Titles_Removed.txt"
+            dead_file    = f"{folder}/dead_videos.txt"
 
-        current       = {}
-        track_map     = {}
-        nextPageToken = None
+            for f_path in [added_file, removed_file, dead_file]:
+                if not os.path.exists(f_path): open(f_path, 'w').close()
 
-        while True:
-            request = youtube.playlistItems().list(
-                part       = 'contentDetails',
-                playlistId = playlist_id,
-                maxResults = 50,
-                pageToken  = nextPageToken
-            )
-            pl_response = execute_with_retry(request)
+            current = {}
+            nextPageToken = None
             
-            if not pl_response.get('items'):
-                break
+            while True:
+                pl_response = execute_with_retry(youtube.playlistItems().list(
+                    part='contentDetails', playlistId=playlist_id, maxResults=50, pageToken=nextPageToken
+                ))
+                
+                if not pl_response.get('items'): break
 
-            vid_ids = []
-            for item in pl_response['items']:
-                vid_id = item["contentDetails"]["videoId"]
-                vid_ids.append(vid_id)
-                if vid_id not in track_map:
-                    track_map[vid_id] = len(track_map) + 1
+                vid_ids = [item["contentDetails"]["videoId"] for item in pl_response['items']]
+                vid_response = execute_with_retry(youtube.videos().list(
+                    part="snippet,contentDetails", id=','.join(vid_ids), maxResults=50
+                ))
 
-            request = youtube.videos().list(
-                part       = "snippet, contentDetails",
-                id         = ','.join(vid_ids),
-                maxResults = 50
-            )
-            vid_response = execute_with_retry(request)
+                for item in vid_response.get('items', []):
+                    vid_id = item['id']
+                    if vid_id in current: continue
+                    
+                    snippet = item['snippet']
+                    current[vid_id] = {
+                        "title": snippet['title'],
+                        "channel": snippet['channelTitle'],
+                        "published": snippet['publishedAt'],
+                        "duration": item['contentDetails']['duration'],
+                        "description": snippet.get('description', ''),
+                        "url": f"https://www.youtube.com/watch?v={vid_id}",
+                        "track_number": len(current) + 1,
+                        "tags": snippet.get('tags', [])
+                    }
 
-            for item in vid_response['items']:
-                vid_id = item['id']
-                desc = item['snippet'].get('description', '')
-                tags = item['snippet'].get('tags', [])
-                current[vid_id] = {
-                    "title"       : item['snippet']['title'],
-                    "channel"     : item['snippet']['channelTitle'],
-                    "published"   : item['snippet']['publishedAt'],
-                    "duration"    : item['contentDetails']['duration'],
-                    "description" : desc,
-                    "url"         : f"https://www.youtube.com/watch?v={vid_id}",
-                    "track_number": track_map[vid_id],
-                    "tags"        : tags
-                }
+                nextPageToken = pl_response.get("nextPageToken")
+                if not nextPageToken: break
 
-            nextPageToken = pl_response.get("nextPageToken")
-            if not nextPageToken:
-                break
+            sorted_current = sorted(current.items(), key=lambda x: x[1]['track_number'])
+            previous = pickle.load(open(data_file, 'rb')) if os.path.exists(data_file) else {}
 
-        sorted_current = sorted(current.items(), key=lambda x: x[1]['track_number'])
+            def log_changes(filename, diff_dict, action):
+                if not diff_dict: return
+                with open(filename, "a", encoding="utf-8") as f:
+                    f.write(f"{action} on: {current_time}\n\n")
+                    for _, meta in diff_dict.items():
+                        desc = meta['description'].replace('\n', ' ')[:150]
+                        f.write(f"Track {meta.get('track_number', '?')}: {meta['title']}\n"
+                                f"   Channel  : {meta['channel']}\n"
+                                f"   Published: {meta['published']}\n"
+                                f"   Duration : {meta['duration']}\n"
+                                f"   URL      : {meta['url']}\n"
+                                f"   Desc     : {desc}...\n\n")
+                    f.write("#-----------------------------------------------#\n\n")
 
-        if os.path.exists(data_file):
-            with open(data_file, 'rb') as f:
-                previous = pickle.load(f)
-        else:
-            previous = {}
+            log_changes(added_file, {k: v for k, v in current.items() if k not in previous}, "Added")
+            log_changes(removed_file, {k: v for k, v in previous.items() if k not in current}, "Removed")
 
-        added   = {sid: current[sid]  for sid in current  if sid not in previous}
-        removed = {sid: previous[sid] for sid in previous if sid not in current}
+            with open(data_file, 'wb') as f:
+                pickle.dump(current, f, protocol=pickle.HIGHEST_PROTOCOL)
 
-        if added:
-            with open(added_file, "a", encoding="utf-8") as f:
-                f.write(f"Added on: {current_time}\n\n")
-                for vid_id, meta in added.items():
-                    f.write(f"Track {meta['track_number']}: {meta['title']}\n")
-                    f.write(f"   Channel  : {meta['channel']}\n")
-                    f.write(f"   Published: {meta['published']}\n")
-                    f.write(f"   Duration : {meta['duration']}\n")
-                    f.write(f"   URL      : {meta['url']}\n")
-                    short_desc = meta['description'].replace('\n', ' ')[:150]
-                    f.write(f"   Desc     : {short_desc}...\n\n")
-                f.write("#-----------------------------------------------#\n\n")
+            with open(titles_file, "w", encoding="utf-8") as f:
+                f.write(f"Playlist last checked on: {current_time}\n\n")
+                f.writelines([f"{meta['track_number']}: {meta['title']}\n" for _, meta in sorted_current])
 
-        if removed:
-            with open(removed_file, "a", encoding="utf-8") as f:
-                f.write(f"Removed on: {current_time}\n\n")
-                for vid_id, meta in removed.items():
-                    f.write(f"Track {meta.get('track_number', '?')}: {meta['title']}\n")
-                    f.write(f"   Channel  : {meta['channel']}\n")
-                    f.write(f"   Published: {meta['published']}\n")
-                    f.write(f"   Duration : {meta['duration']}\n")
-                    f.write(f"   URL      : {meta['url']}\n")
-                    short_desc = meta['description'].replace('\n', ' ')[:150]
-                    f.write(f"   Desc     : {short_desc}...\n\n")
-                f.write("#-----------------------------------------------#\n\n")
-
-        with open(data_file, 'wb') as f:
-            pickle.dump(current, f, protocol=pickle.HIGHEST_PROTOCOL)
-
-        with open(titles_file, "w", encoding="utf-8") as f:
-            f.write(f"Playlist last checked on: {current_time}\n\n")
+            json_data = []
+            m3u8_lines = ["#EXTM3U\n"]
+            
             for vid_id, meta in sorted_current:
-                f.write(f"{meta['track_number']}: {meta['title']}\n")
+                safe_title, safe_channel = sanitize(meta['title']), sanitize(meta['channel'])
+                detailed_name = f"{safe_title} - {safe_channel}"
+                
+                m3u8_lines.append(f"#EXTINF:-1,{meta['title']} - {meta['channel']}\n{detailed_name}.webm\n")
+                
+                json_data.append({
+                    "id": vid_id, "title": meta.get('title', 'Unknown Title'),
+                    "channel": meta.get('channel', 'Unknown Channel'),
+                    "duration": meta.get('duration', 0),
+                    "file_path": f"{folder}/{detailed_name}.webm",
+                    "thumbnail_path": f"{folder}/thumbnails/{detailed_name}.jpg",
+                    "description": meta.get('description', ''),
+                    "upload_date": meta.get('published', ''),
+                    "tags": meta.get('tags', [])
+                })
 
-        m3u_path = f"{folder}/_Playlist_Order.m3u8"
-        with open(m3u_path, "w", encoding="utf-8") as f:
-            f.write("#EXTM3U\n")
+            with open(f"{folder}/_Playlist_Order.m3u8", "w", encoding="utf-8") as f:
+                f.writelines(m3u8_lines)
+                
+            with open(f"{folder}/_Playlist_Database.json", "w", encoding="utf-8") as f:
+                json.dump(json_data, f, indent=4, ensure_ascii=False)
+
+            with open(dead_file, "r", encoding="utf-8") as f:
+                dead_videos = f.read()
+
             for vid_id, meta in sorted_current:
-                safe_title = sanitize_filename(meta['title'])
-                safe_channel = sanitize_filename(meta['channel'])
-                if not safe_title: safe_title = vid_id
-                if not safe_channel: safe_channel = "Unknown"
-                f.write(f"#EXTINF:-1,{meta['title']} - {meta['channel']}\n")
-                f.write(f"{safe_title} - {safe_channel}.webm\n")
-
-        json_path = f"{folder}/_Playlist_Database.json"
-        json_data = []
-        for vid_id, meta in sorted_current:
-            safe_title = sanitize_filename(meta['title'])
-            safe_channel = sanitize_filename(meta['channel'])
-            if not safe_title: safe_title = vid_id
-            if not safe_channel: safe_channel = "Unknown"
-            
-            detailed_name = f"{safe_title} - {safe_channel}"
-            file_path = f"{folder}/{detailed_name}.webm"
-            thumb_path = f"{folder}/thumbnails/{detailed_name}.jpg"
-
-            json_data.append({
-                "id": vid_id,
-                "title": meta.get('title', 'Unknown Title'),
-                "channel": meta.get('channel', 'Unknown Channel'),
-                "duration": meta.get('duration', 0),
-                "file_path": file_path,
-                "thumbnail_path": thumb_path,
-                "description": meta.get('description', ''),
-                "upload_date": meta.get('published', ''),
-                "tags": meta.get('tags', [])
-            })
-            
-        with open(json_path, "w", encoding="utf-8") as f:
-            json.dump(json_data, f, indent=4, ensure_ascii=False)
-
-        with open(dead_file, "r", encoding="utf-8") as f:
-            dead_videos = f.read()
-
-        for vid_id, meta in sorted_current:
-            safe_title = sanitize_filename(meta['title'])
-            safe_channel = sanitize_filename(meta['channel'])
-            if not safe_title: safe_title = vid_id
-            if not safe_channel: safe_channel = "Unknown"
-            
-            detailed_name = f"{safe_title} - {safe_channel}"
-            output_path = f"{folder}/{detailed_name}.webm"
-            
-            if not os.path.exists(output_path):
-                if vid_id in dead_videos:
+                detailed_name = f"{sanitize(meta['title'])} - {sanitize(meta['channel'])}"
+                output_path = f"{folder}/{detailed_name}.webm"
+                
+                # Check if file exists locally OR is already tracked in git (but excluded by sparse checkout)
+                is_tracked = output_path.replace('\\', '/') in git_tracked_files
+                
+                if os.path.exists(output_path) or is_tracked or vid_id in dead_videos:
                     continue
 
-                print(f"Missing Audio File: {detailed_name} | https://www.youtube.com/watch?v={vid_id} | {playlist_name}")
-                file_start_time = datetime.datetime.now()
-                skip_hunting = False
+                print(f"Missing Audio: {detailed_name} | {meta['url']} | {playlist_name}")
+                skip = False
                 
                 for cached_proxy in list(working_proxies_cache):
-                    print(f"    -> Trying known good cached proxy: {cached_proxy}")
-                    res = download_audio_ytdlp(vid_id, output_path, folder, proxy=cached_proxy)
-                    
+                    print(f"    -> Trying cached proxy: {cached_proxy}")
+                    res = download_audio_ytdlp(vid_id, output_path, folder, cached_proxy)
                     if res == "SUCCESS":
                         print(f"    -> Download complete: {output_path}")
-                        skip_hunting = True
+                        skip = True
                         break
-                    elif res == "FATAL_DELETED":
-                        print(f"    -> FATAL: Video was permanently deleted or made private. Skipping permanently.")
+                    elif res in ("FATAL_DELETED", "FATAL_AGE_RESTRICTED"):
                         with open(dead_file, "a", encoding="utf-8") as f:
-                            f.write(f"{vid_id} - {detailed_name} - https://www.youtube.com/watch?v={vid_id}\n")
-                        dead_videos += f"{vid_id}\n"  
-                        skip_hunting = True 
-                        break
-                    elif res == "FATAL_AGE_RESTRICTED":
-                        print(f"    -> FATAL: Video is age-restricted. Proxies cannot bypass logins. Skipping permanently.")
-                        with open(dead_file, "a", encoding="utf-8") as f:
-                            f.write(f"{vid_id} - {detailed_name} - https://www.youtube.com/watch?v={vid_id} (Reason: Age Restricted)\n")
+                            f.write(f"{vid_id} - {detailed_name} - {meta['url']} ({res})\n")
                         dead_videos += f"{vid_id}\n"
-                        skip_hunting = True 
+                        skip = True 
                         break
-                    else:
-                        print("    -> Cached proxy failed or video is geo-blocked here.")
+
+                if skip: continue
                 
-                if skip_hunting:
-                    continue
-                
-                unavailable_count = 0
                 success = False
-                for attempt in range(30):
-                    
-                    proxy_refresh_attempts = 0
-                    while not raw_proxy_pool and proxy_refresh_attempts < 3:
-                        refresh_proxies()
-                        proxy_refresh_attempts += 1
-                        
+                unavailable_count = 0
+                
+                for attempt in range(15):  # Reduced from 30 for speed
+                    if not raw_proxy_pool: refresh_proxies()
                     if not raw_proxy_pool:
-                        print("    -> ERROR: Exhausted proxy sources. Network block or rate-limit active. Skipping track.")
+                        print("    -> ERROR: Exhausted proxies. Skipping track.")
                         break
                         
                     proxy = raw_proxy_pool.pop(0)
-                    
-                    print(f"    -> (Attempt {attempt+1}/30) Trying proxy: {proxy}")
-                    res = download_audio_ytdlp(vid_id, output_path, folder, proxy=proxy)
+                    print(f"    -> (Attempt {attempt+1}/15) Trying proxy: {proxy}")
+                    res = download_audio_ytdlp(vid_id, output_path, folder, proxy)
                     
                     if res == "SUCCESS":
                         print(f"    -> Download complete: {output_path}")
                         working_proxies_cache.append(proxy) 
                         success = True
                         break
-                        
-                    if res == "FATAL_DELETED":
-                        print(f"    -> FATAL: Video was permanently deleted or made private. Skipping permanently.")
+                    elif res in ("FATAL_DELETED", "FATAL_AGE_RESTRICTED"):
                         with open(dead_file, "a", encoding="utf-8") as f:
-                            f.write(f"{vid_id} - {detailed_name} - https://www.youtube.com/watch?v={vid_id}\n")
+                            f.write(f"{vid_id} - {detailed_name} - {meta['url']} ({res})\n")
                         dead_videos += f"{vid_id}\n"  
                         break
-
-                    if res == "FATAL_AGE_RESTRICTED":
-                        print(f"    -> FATAL: Video is age-restricted. Proxies cannot bypass logins. Skipping permanently.")
-                        with open(dead_file, "a", encoding="utf-8") as f:
-                            f.write(f"{vid_id} - {detailed_name} - https://www.youtube.com/watch?v={vid_id} (Reason: Age Restricted)\n")
-                        dead_videos += f"{vid_id}\n"  
-                        break
-                    
-                    if res == "GEO_BLOCKED":
+                    elif res == "GEO_BLOCKED":
                         unavailable_count += 1
-                        print(f"        -> Video geo-blocked in this proxy's region. (Count: {unavailable_count}/5)")
                         if unavailable_count >= 4:
-                            print(f"    -> FATAL: Video geo-blocked across 4 different proxies. Skipping permanently.")
                             with open(dead_file, "a", encoding="utf-8") as f:
-                                f.write(f"{vid_id} - {detailed_name} - https://www.youtube.com/watch?v={vid_id}\n")
+                                f.write(f"{vid_id} - {detailed_name} - {meta['url']} (GEO_BLOCKED)\n")
                             dead_videos += f"{vid_id}\n"  
                             break
                         
-                if not success and res != "FATAL_DELETED" and unavailable_count < 4:
-                    print(f"ERROR: Could not download {detailed_name} after exhausting proxy options.")
-                    elapsed_secs = (datetime.datetime.now() - file_start_time).total_seconds()
-                    print(f"    -> Time elapsed before failing: {elapsed_secs:.2f} seconds")
+                if not success and res not in ("FATAL_DELETED", "FATAL_AGE_RESTRICTED") and unavailable_count < 4:
+                    print(f"ERROR: Could not download {detailed_name}.")
 
-        print(f"    -> Syncing exact playlist order (.m3u8) and logs for {playlist_name}...")
-        git_commit_and_push(f"Sync {playlist_name} tracker, logs, and new audio files")
+            print(f"    -> Syncing logs and new files for {playlist_name}...")
+            git_commit_and_push(f"Sync {playlist_name} tracker, logs, and new audio files")
 
-    except Exception as e:
-        print(f"Failed to process {playlist_name}: {e}")
-        traceback.print_exc()
-        continue
+        except Exception as e:
+            print(f"Failed to process {playlist_name}: {e}")
+            traceback.print_exc()
+
+if __name__ == "__main__":
+    main()
