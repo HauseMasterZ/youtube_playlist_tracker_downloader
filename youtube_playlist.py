@@ -13,6 +13,10 @@ import json
 import traceback
 import threading
 
+import sys
+# Force unbuffered output so GitHub Actions logs stream in real-time
+sys.stdout.reconfigure(line_buffering=True)
+
 from googleapiclient.discovery import build
 import yt_dlp
 
