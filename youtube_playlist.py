@@ -11,6 +11,7 @@ import socket
 import time
 import json
 import traceback
+import threading
 
 from googleapiclient.discovery import build
 import yt_dlp
@@ -45,12 +46,21 @@ current_time = datetime.datetime.now()
 # Globals for proxy cache
 working_proxies_cache = []
 raw_proxy_pool = []
+proxy_lock = threading.Lock()
+dead_file_lock = threading.Lock()
+print_lock = threading.Lock()
 
 # Fetch tracked files to avoid relying on os.path.exists for large files excluded by sparse-checkout
 try:
-    tracked_files_output = subprocess.check_output(['git', 'ls-files']).decode('utf-8')
-    git_tracked_files = set(tracked_files_output.splitlines())
-except Exception:
+    tracked_files_output = subprocess.check_output(
+        ['git', '-c', 'core.quotePath=false', 'ls-files'],
+        text=True,
+        encoding='utf-8',
+        errors='replace'
+    )
+    git_tracked_files = {line.strip('"') for line in tracked_files_output.splitlines()}
+except Exception as e:
+    print(f"WARNING: Could not fetch git tracked files: {e}")
     git_tracked_files = set()
 
 def check_proxy(proxy_url):
@@ -179,6 +189,89 @@ def git_commit_and_push(title):
 def sanitize(name):
     return re.sub(r'[\\/*?:"<>|]', "", name) or "Unknown"
 
+def atomic_write(filepath, content, mode='w', is_json=False, is_pickle=False):
+    tmp_path = filepath + '.tmp'
+    try:
+        if is_pickle:
+            with open(tmp_path, 'wb') as f:
+                pickle.dump(content, f, protocol=pickle.HIGHEST_PROTOCOL)
+        elif is_json:
+            with open(tmp_path, 'w', encoding='utf-8') as f:
+                json.dump(content, f, indent=4, ensure_ascii=False)
+        else:
+            with open(tmp_path, mode, encoding='utf-8' if 'b' not in mode else None) as f:
+                if isinstance(content, list):
+                    f.writelines(content)
+                else:
+                    f.write(content)
+        os.replace(tmp_path, filepath)
+    except Exception as e:
+        print(f"ERROR: Failed atomic write for {filepath}: {e}")
+        if os.path.exists(tmp_path):
+            try:
+                os.remove(tmp_path)
+            except:
+                pass
+
+def process_track(vid_id, meta, detailed_name, output_path, folder, playlist_name, dead_file):
+    def safe_print(msg):
+        with print_lock: print(msg)
+        
+    safe_print(f"Missing Audio: {detailed_name} | {meta['url']} | {playlist_name}")
+    
+    with proxy_lock:
+        local_cache = list(working_proxies_cache)
+        
+    for cached_proxy in local_cache:
+        safe_print(f"    -> [{detailed_name}] Trying cached proxy: {cached_proxy}")
+        res = download_audio_ytdlp(vid_id, output_path, folder, cached_proxy)
+        if res == "SUCCESS":
+            safe_print(f"    -> [{detailed_name}] Download complete: {output_path}")
+            return "SUCCESS", vid_id
+        elif res in ("FATAL_DELETED", "FATAL_AGE_RESTRICTED"):
+            with dead_file_lock:
+                with open(dead_file, "a", encoding="utf-8") as f:
+                    f.write(f"{vid_id} - {detailed_name} - {meta['url']} ({res})\n")
+            return "DEAD", vid_id
+            
+    success = False
+    unavailable_count = 0
+    
+    for attempt in range(10):  # Reduced from 15 for faster failure
+        with proxy_lock:
+            if not raw_proxy_pool:
+                refresh_proxies()
+            if not raw_proxy_pool:
+                safe_print(f"    -> [{detailed_name}] ERROR: Exhausted proxies.")
+                break
+            proxy = raw_proxy_pool.pop(0)
+            
+        safe_print(f"    -> [{detailed_name}] (Attempt {attempt+1}/10) Trying proxy: {proxy}")
+        res = download_audio_ytdlp(vid_id, output_path, folder, proxy)
+        
+        if res == "SUCCESS":
+            safe_print(f"    -> [{detailed_name}] Download complete: {output_path}")
+            with proxy_lock:
+                working_proxies_cache.append(proxy)
+            return "SUCCESS", vid_id
+        elif res in ("FATAL_DELETED", "FATAL_AGE_RESTRICTED"):
+            with dead_file_lock:
+                with open(dead_file, "a", encoding="utf-8") as f:
+                    f.write(f"{vid_id} - {detailed_name} - {meta['url']} ({res})\n")
+            return "DEAD", vid_id
+        elif res == "GEO_BLOCKED":
+            unavailable_count += 1
+            if unavailable_count >= 4:
+                with dead_file_lock:
+                    with open(dead_file, "a", encoding="utf-8") as f:
+                        f.write(f"{vid_id} - {detailed_name} - {meta['url']} (GEO_BLOCKED)\n")
+                return "DEAD", vid_id
+                
+    if not success and unavailable_count < 4:
+        safe_print(f"ERROR: Could not download {detailed_name}.")
+        
+    return "FAIL", vid_id
+
 def main():
     if not youtube_api_key: return
     
@@ -232,7 +325,12 @@ def main():
                 if not nextPageToken: break
 
             sorted_current = sorted(current.items(), key=lambda x: x[1]['track_number'])
-            previous = pickle.load(open(data_file, 'rb')) if os.path.exists(data_file) else {}
+            
+            try:
+                previous = pickle.load(open(data_file, 'rb')) if os.path.exists(data_file) else {}
+            except Exception as e:
+                print(f"    -> WARNING: Cache corrupted or failed to load ({e}). Rebuilding.")
+                previous = {}
 
             def log_changes(filename, diff_dict, action):
                 if not diff_dict: return
@@ -251,12 +349,11 @@ def main():
             log_changes(added_file, {k: v for k, v in current.items() if k not in previous}, "Added")
             log_changes(removed_file, {k: v for k, v in previous.items() if k not in current}, "Removed")
 
-            with open(data_file, 'wb') as f:
-                pickle.dump(current, f, protocol=pickle.HIGHEST_PROTOCOL)
+            atomic_write(data_file, current, is_pickle=True)
 
-            with open(titles_file, "w", encoding="utf-8") as f:
-                f.write(f"Playlist last checked on: {current_time}\n\n")
-                f.writelines([f"{meta['track_number']}: {meta['title']}\n" for _, meta in sorted_current])
+            titles_content = f"Playlist last checked on: {current_time}\n\n" + \
+                             "".join([f"{meta['track_number']}: {meta['title']}\n" for _, meta in sorted_current])
+            atomic_write(titles_file, titles_content)
 
             json_data = []
             m3u8_lines = ["#EXTM3U\n"]
@@ -278,15 +375,13 @@ def main():
                     "tags": meta.get('tags', [])
                 })
 
-            with open(f"{folder}/_Playlist_Order.m3u8", "w", encoding="utf-8") as f:
-                f.writelines(m3u8_lines)
-                
-            with open(f"{folder}/_Playlist_Database.json", "w", encoding="utf-8") as f:
-                json.dump(json_data, f, indent=4, ensure_ascii=False)
+            atomic_write(f"{folder}/_Playlist_Order.m3u8", m3u8_lines)
+            atomic_write(f"{folder}/_Playlist_Database.json", json_data, is_json=True)
 
             with open(dead_file, "r", encoding="utf-8") as f:
                 dead_videos = f.read()
 
+            missing_tracks = []
             for vid_id, meta in sorted_current:
                 detailed_name = f"{sanitize(meta['title'])} - {sanitize(meta['channel'])}"
                 output_path = f"{folder}/{detailed_name}.webm"
@@ -296,59 +391,20 @@ def main():
                 
                 if os.path.exists(output_path) or is_tracked or vid_id in dead_videos:
                     continue
-
-                print(f"Missing Audio: {detailed_name} | {meta['url']} | {playlist_name}")
-                skip = False
                 
-                for cached_proxy in list(working_proxies_cache):
-                    print(f"    -> Trying cached proxy: {cached_proxy}")
-                    res = download_audio_ytdlp(vid_id, output_path, folder, cached_proxy)
-                    if res == "SUCCESS":
-                        print(f"    -> Download complete: {output_path}")
-                        skip = True
-                        break
-                    elif res in ("FATAL_DELETED", "FATAL_AGE_RESTRICTED"):
-                        with open(dead_file, "a", encoding="utf-8") as f:
-                            f.write(f"{vid_id} - {detailed_name} - {meta['url']} ({res})\n")
-                        dead_videos += f"{vid_id}\n"
-                        skip = True 
-                        break
-
-                if skip: continue
+                missing_tracks.append((vid_id, meta, detailed_name, output_path))
                 
-                success = False
-                unavailable_count = 0
-                
-                for attempt in range(15):  # Reduced from 30 for speed
-                    if not raw_proxy_pool: refresh_proxies()
-                    if not raw_proxy_pool:
-                        print("    -> ERROR: Exhausted proxies. Skipping track.")
-                        break
-                        
-                    proxy = raw_proxy_pool.pop(0)
-                    print(f"    -> (Attempt {attempt+1}/15) Trying proxy: {proxy}")
-                    res = download_audio_ytdlp(vid_id, output_path, folder, proxy)
-                    
-                    if res == "SUCCESS":
-                        print(f"    -> Download complete: {output_path}")
-                        working_proxies_cache.append(proxy) 
-                        success = True
-                        break
-                    elif res in ("FATAL_DELETED", "FATAL_AGE_RESTRICTED"):
-                        with open(dead_file, "a", encoding="utf-8") as f:
-                            f.write(f"{vid_id} - {detailed_name} - {meta['url']} ({res})\n")
-                        dead_videos += f"{vid_id}\n"  
-                        break
-                    elif res == "GEO_BLOCKED":
-                        unavailable_count += 1
-                        if unavailable_count >= 4:
-                            with open(dead_file, "a", encoding="utf-8") as f:
-                                f.write(f"{vid_id} - {detailed_name} - {meta['url']} (GEO_BLOCKED)\n")
-                            dead_videos += f"{vid_id}\n"  
-                            break
-                        
-                if not success and res not in ("FATAL_DELETED", "FATAL_AGE_RESTRICTED") and unavailable_count < 4:
-                    print(f"ERROR: Could not download {detailed_name}.")
+            if missing_tracks:
+                print(f"    -> Found {len(missing_tracks)} missing tracks. Downloading concurrently...")
+                with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+                    futures = {executor.submit(process_track, t[0], t[1], t[2], t[3], folder, playlist_name, dead_file): t[0] for t in missing_tracks}
+                    for future in concurrent.futures.as_completed(futures):
+                        try:
+                            status, vid_id = future.result()
+                            if status == "DEAD":
+                                dead_videos += f"{vid_id}\n"
+                        except Exception as e:
+                            print(f"    -> FATAL THREAD ERROR for {futures[future]}: {e}")
 
             print(f"    -> Syncing logs and new files for {playlist_name}...")
             git_commit_and_push(f"Sync {playlist_name} tracker, logs, and new audio files")
