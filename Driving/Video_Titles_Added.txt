@@ -2885,3 +2885,42 @@ Track 1: Popular
 
 #-----------------------------------------------#
 
+Added on: 2026-07-24 14:06:02.042065
+
+Track 1: Ammaye
+   Channel  : Udit Narayan - Topic
+   Published: 2015-06-23T16:46:19Z
+   Duration : PT4M52S
+   URL      : https://www.youtube.com/watch?v=kUNDYAbTv3A
+   Desc     : Provided to YouTube by YouTube CSV2DDEX  Ammaye · Udit Narayan · Kavitha Subramanyam  Kushi  ℗ 2014 Aditya Music (India) Pvt Ltd  Released on: 2001-03...
+
+Track 2: Pellithone
+   Channel  : Haricharan - Topic
+   Published: 2015-06-23T16:05:52Z
+   Duration : PT1M48S
+   URL      : https://www.youtube.com/watch?v=dO9rdZrK_yo
+   Desc     : Provided to YouTube by YouTube CSV2DDEX  Pellithone · Haricharan · Swetha Mohan  100% Love  ℗ 2014 Aditya Music (India) Pvt Ltd  Released on: 2011-04-...
+
+Track 3: Blockbuster
+   Channel  : Shreya Ghoshal - Topic
+   Published: 2019-01-17T03:04:58Z
+   Duration : PT5M5S
+   URL      : https://www.youtube.com/watch?v=ppqsXkZ5pSQ
+   Desc     : Provided to YouTube by Super Cassettes Industries Private Limited  Blockbuster · Shreya Ghoshal · Nakash Aziz · Simha · Sri Krishna · Deepu · S.S. Tha...
+
+Track 4: Jhoome Jo Pathaan (From "Pathaan")
+   Channel  : Arijit Singh - Topic
+   Published: 2022-12-22T05:53:31Z
+   Duration : PT3M29S
+   URL      : https://www.youtube.com/watch?v=AU9AdGIdWZs
+   Desc     : Provided to YouTube by yrfmusic  Jhoome Jo Pathaan (From "Pathaan") · Vishal and Sheykhar · Arijit Singh · Sukriti Kakar · Vishal Dadlani · Sheykhar R...
+
+Track 5: Nadh Nadh
+   Channel  : Release - Topic
+   Published: 2015-06-23T17:16:27Z
+   Duration : PT4M11S
+   URL      : https://www.youtube.com/watch?v=q42TTBn_cBM
+   Desc     : Provided to YouTube by YouTube CSV2DDEX  Nadh Nadh · Jessi Gift · Sunidhi Chauhan  Badrenath  ℗ 2014 Aditya Music (India) Pvt Ltd  Released on: 2011-0...
+
+#-----------------------------------------------#
+
