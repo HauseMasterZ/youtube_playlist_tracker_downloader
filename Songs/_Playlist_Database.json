@@ -2344,7 +2344,7 @@
             "Second Chance",
             "Dancin' For The Power"
         ],
-        "is_dead": false
+        "is_dead": true
     },
     {
         "id": "SapNpd42csM",
@@ -2359,7 +2359,7 @@
             "HazeRipper",
             "Top G"
         ],
-        "is_dead": false
+        "is_dead": true
     },
     {
         "id": "ASR9Z3DVCbc",
@@ -3089,7 +3089,7 @@
             "HazeRipper",
             "Destroyer"
         ],
-        "is_dead": false
+        "is_dead": true
     },
     {
         "id": "qdGZ_Oy_yQ0",
@@ -3104,7 +3104,7 @@
             "HazeRipper",
             "Fool"
         ],
-        "is_dead": false
+        "is_dead": true
     },
     {
         "id": "ewH-kpe4vJs",
@@ -3119,7 +3119,7 @@
             "HazeRipper",
             "Lane Switching"
         ],
-        "is_dead": false
+        "is_dead": true
     },
     {
         "id": "kGjPTJmedpE",
@@ -3149,7 +3149,7 @@
             "HazeRipper",
             "Ak 47"
         ],
-        "is_dead": false
+        "is_dead": true
     },
     {
         "id": "XenYb-QrmM8",
@@ -3164,7 +3164,7 @@
             "HazeRipper",
             "Hunter"
         ],
-        "is_dead": false
+        "is_dead": true
     },
     {
         "id": "sdixhBISOes",
@@ -3179,7 +3179,7 @@
             "HazeRipper",
             "Dirty Sprite"
         ],
-        "is_dead": false
+        "is_dead": true
     },
     {
         "id": "HbVX_H-_tqQ",
@@ -3194,7 +3194,7 @@
             "HazeRipper",
             "Glock Em"
         ],
-        "is_dead": false
+        "is_dead": true
     },
     {
         "id": "AUFAFysfO38",
@@ -3209,7 +3209,7 @@
             "HazeRipper",
             "On Da Grind"
         ],
-        "is_dead": false
+        "is_dead": true
     },
     {
         "id": "yuFMAzbiuiI",
@@ -3556,7 +3556,7 @@
             "HazeRipper",
             "Killer Instincs"
         ],
-        "is_dead": false
+        "is_dead": true
     },
     {
         "id": "vDFwXnJf41w",
@@ -3571,7 +3571,7 @@
             "HazeRipper",
             "Today We Hustle"
         ],
-        "is_dead": false
+        "is_dead": true
     },
     {
         "id": "ygrBZj07zYU",
@@ -3624,7 +3624,7 @@
             "FastDrift",
             "They Hatin´"
         ],
-        "is_dead": false
+        "is_dead": true
     },
     {
         "id": "4tywp83zkmk",
@@ -3824,7 +3824,7 @@
             "Phase 4: The Final Chapter",
             "RIPSTICK"
         ],
-        "is_dead": false
+        "is_dead": true
     },
     {
         "id": "l3A0zj4zyzk",
@@ -3975,7 +3975,7 @@
             "$uLTANR$",
             "Lost"
         ],
-        "is_dead": false
+        "is_dead": true
     },
     {
         "id": "JZjAg6fK-BQ",
@@ -4117,7 +4117,7 @@
             "fracko",
             "Winnin'"
         ],
-        "is_dead": false
+        "is_dead": true
     },
     {
         "id": "Hh5jEQraXaw",
@@ -5321,7 +5321,7 @@
             "Up The RIvals",
             "First Day in Summer"
         ],
-        "is_dead": false
+        "is_dead": true
     },
     {
         "id": "XmxPXkRVHhk",
@@ -5336,7 +5336,7 @@
             "BerthCh",
             "Comeback futt"
         ],
-        "is_dead": false
+        "is_dead": true
     },
     {
         "id": "lbNg04mIzT8",
@@ -6295,7 +6295,7 @@
             "Cephalopod",
             "Griphop"
         ],
-        "is_dead": false
+        "is_dead": true
     },
     {
         "id": "mXwrPp5FIYY",
@@ -6311,7 +6311,7 @@
             "Medium Electronic",
             "Killing Time"
         ],
-        "is_dead": false
+        "is_dead": true
     },
     {
         "id": "GciS7i-6aoo",
@@ -7153,7 +7153,7 @@
             "Felax",
             "Yeezy"
         ],
-        "is_dead": false
+        "is_dead": true
     },
     {
         "id": "r6zIGXun57U",
@@ -7585,7 +7585,7 @@
             "OFIVE1",
             "BIBA (feat. Slick Trick & Toshi)"
         ],
-        "is_dead": false
+        "is_dead": true
     },
     {
         "id": "z7VpSjiZT9M",
@@ -7600,7 +7600,7 @@
             "Farasat Anees",
             "Dill Laggi"
         ],
-        "is_dead": false
+        "is_dead": true
     },
     {
         "id": "yMEXamAwAeo",
@@ -8080,7 +8080,7 @@
             "Placepo Beats",
             "Polozheniye"
         ],
-        "is_dead": false
+        "is_dead": true
     },
     {
         "id": "E0NEMDtZdE0",
@@ -10781,7 +10781,7 @@
             "OMI",
             "Cheerleader (Felix Jaehn Remix Radio Edit)"
         ],
-        "is_dead": false
+        "is_dead": true
     },
     {
         "id": "Cu7HaeRHMhM",
@@ -11406,7 +11406,7 @@
             "Race Gurram",
             "Sweety"
         ],
-        "is_dead": false
+        "is_dead": true
     },
     {
         "id": "0KSOMA3QBU0",
@@ -11622,7 +11622,7 @@
             "Once Upon a Time in 2003",
             "Hey Ya!"
         ],
-        "is_dead": false
+        "is_dead": true
     },
     {
         "id": "2MaOYTxU43A",
@@ -11790,7 +11790,7 @@
             "Rising",
             "Sun"
         ],
-        "is_dead": false
+        "is_dead": true
     },
     {
         "id": "2cWM0fvTiTI",
@@ -11805,7 +11805,7 @@
             "dioronabeat",
             "Положение (2 Remix)"
         ],
-        "is_dead": false
+        "is_dead": true
     },
     {
         "id": "y4LZv16V6w8",
@@ -12277,7 +12277,7 @@
             "Half-Life 2",
             "Hazardous Environments"
         ],
-        "is_dead": false
+        "is_dead": true
     },
     {
         "id": "OlD3RmqHSIg",
@@ -12326,7 +12326,7 @@
             "Justin Snyder",
             "Cum Check This"
         ],
-        "is_dead": false
+        "is_dead": true
     },
     {
         "id": "9hhMUT2U2L4",
@@ -12633,7 +12633,7 @@
             "Movements (feat. Yung Fusion) [Delusion Remix] - Single",
             "Movements (feat. Yung Fusion)"
         ],
-        "is_dead": false
+        "is_dead": true
     },
     {
         "id": "5U5Ru0nTiUM",
@@ -12666,7 +12666,7 @@
             "Nightshift TV",
             "Drive Forever"
         ],
-        "is_dead": false
+        "is_dead": true
     },
     {
         "id": "0ZUoFPLlVQU",
@@ -12874,7 +12874,7 @@
             "BauBeatz",
             "Forget Me Not"
         ],
-        "is_dead": false
+        "is_dead": true
     },
     {
         "id": "Jmv5pTyz--I",
@@ -12952,7 +12952,7 @@
             "Tha 'mai Kalo Paidi (I Am A Gummy Bear)",
             "I Am A Gummy Bear (The Gummy Bear Song)"
         ],
-        "is_dead": false
+        "is_dead": true
     },
     {
         "id": "eDbcsGvQ2Rg",
@@ -14719,7 +14719,7 @@
             "OMFG",
             "Everybody"
         ],
-        "is_dead": false
+        "is_dead": true
     },
     {
         "id": "pfVODjDBFxU",
@@ -20465,7 +20465,7 @@
             "deadman 死人",
             "Omae Wa Mou"
         ],
-        "is_dead": false
+        "is_dead": true
     },
     {
         "id": "AsYREFwxYFI",
@@ -20510,7 +20510,7 @@
             "Halogen",
             "U Got That"
         ],
-        "is_dead": false
+        "is_dead": true
     },
     {
         "id": "LKALcthKSwA",
@@ -21505,7 +21505,7 @@
             "Marvin Divine",
             "MATAFAKA"
         ],
-        "is_dead": false
+        "is_dead": true
     },
     {
         "id": "RkppqBIOE90",
@@ -21621,7 +21621,7 @@
             "INZO",
             "Overthinker"
         ],
-        "is_dead": false
+        "is_dead": true
     },
     {
         "id": "oQFZyHuVIt8",
@@ -23039,7 +23039,7 @@
             "GRKAS",
             "War"
         ],
-        "is_dead": false
+        "is_dead": true
     },
     {
         "id": "5JMZm9jUaZs",
@@ -23645,7 +23645,7 @@
             "The Chronic",
             "Nuthin' But A \"G\" Thang"
         ],
-        "is_dead": false
+        "is_dead": true
     },
     {
         "id": "zzwRbKI2pn4",
@@ -23772,7 +23772,7 @@
             "Советы для молодожёнов",
             "Спорт-брат"
         ],
-        "is_dead": false
+        "is_dead": true
     },
     {
         "id": "0IwIwsxVMZ0",
@@ -24694,7 +24694,7 @@
             "クランクザットソウルジャボーイ",
             "クランク・ザット（ソウルジャ・ボーイ）"
         ],
-        "is_dead": false
+        "is_dead": true
     },
     {
         "id": "w4dLTLW6dJ0",
@@ -25672,7 +25672,7 @@
             "Believe in Yourself",
             "Trance Music for Racing Game"
         ],
-        "is_dead": false
+        "is_dead": true
     },
     {
         "id": "lCP8hEXeJ0Q",
@@ -26112,7 +26112,7 @@
             "Code Of The Streets - Volume 1",
             "Oh No"
         ],
-        "is_dead": false
+        "is_dead": true
     },
     {
         "id": "tqxRidAWER8",
@@ -26283,7 +26283,7 @@
             "JVLA",
             "Such a Whore (Stellular Remix)"
         ],
-        "is_dead": false
+        "is_dead": true
     },
     {
         "id": "Qkuu0Lwb5EM",
@@ -26609,7 +26609,7 @@
             "isyan tetick",
             "Patlamaya Devam"
         ],
-        "is_dead": false
+        "is_dead": true
     },
     {
         "id": "9emej_KCRE4",
@@ -27535,7 +27535,7 @@
             "Pharmacist",
             "North Memphis"
         ],
-        "is_dead": false
+        "is_dead": true
     },
     {
         "id": "ytQ5CYE1VZw",
@@ -28141,7 +28141,7 @@
             "Honey Singh Latest Collection",
             "Blue Eyes"
         ],
-        "is_dead": false
+        "is_dead": true
     },
     {
         "id": "J2Bh68GTUOU",
@@ -28536,7 +28536,7 @@
             "Barrio Fino",
             "Gasolina"
         ],
-        "is_dead": false
+        "is_dead": true
     },
     {
         "id": "nYh-n7EOtMA",
@@ -28885,7 +28885,7 @@
             "хаски",
             "feduk"
         ],
-        "is_dead": false
+        "is_dead": true
     },
     {
         "id": "SxtN6jE3Kao",
@@ -29203,7 +29203,7 @@
             "Ondi Vil",
             "Addicted"
         ],
-        "is_dead": false
+        "is_dead": true
     },
     {
         "id": "4r8GmysH28Y",
@@ -29220,7 +29220,7 @@
             "Leveled",
             "up"
         ],
-        "is_dead": false
+        "is_dead": true
     },
     {
         "id": "8pm_KoguqPM",
@@ -30646,7 +30646,7 @@
             "music",
             "reggae"
         ],
-        "is_dead": false
+        "is_dead": true
     },
     {
         "id": "goxaf43Rcsk",
@@ -31417,7 +31417,7 @@
             "F-777",
             "Sound of Infinity"
         ],
-        "is_dead": false
+        "is_dead": true
     },
     {
         "id": "qRdRuk0vXcI",
@@ -31529,7 +31529,7 @@
             "イットエイントミー",
             "イット・エイント・ミー"
         ],
-        "is_dead": false
+        "is_dead": true
     },
     {
         "id": "Xydf351l-gw",
