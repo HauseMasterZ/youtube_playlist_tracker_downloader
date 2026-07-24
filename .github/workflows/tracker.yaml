@@ -14,6 +14,13 @@ jobs:
           lfs: false
           token: ${{ secrets.PAT }}
           fetch-depth: 1
+          filter: blob:none
+          sparse-checkout: |
+            /*
+            !**/*.webm
+            !**/*.jpg
+            !**/thumbnails/**
+          sparse-checkout-cone-mode: false
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -23,16 +30,13 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update && sudo apt-get install -y ffmpeg
-          pip install google-api-python-client
+          pip install google-api-python-client yt-dlp requests PySocks
 
       - name: Configure Git for Python
         run: |
           git config user.name "HauseMasterZ"
           git config user.email "113833707+HauseMasterZ@users.noreply.github.com"
           git lfs install
-          git lfs track "*.opus"
-          git add .gitattributes
-          git commit -m "Configure Git LFS for Opus" || true
 
       - name: Run tracker and download audio
         env:
